@@ -1,0 +1,69 @@
+sample-id	name	sample-identifier	Treatment	Sex	RNA or DNA	Volume (ul)	Conc (ng/ul)	Organism	Sample Description	Plate 	Well	Floor
+5023-OC-01	5023-OC-1_S131_kneaddata_cat.fastq_profile	Experiment 47 F1	Saline 	F	DNA	20	45.4	Mouse	Stool	96 well	A1	infectious
+5023-OC-02	5023-OC-2_S132_kneaddata_cat.fastq_profile	Experiment 47 F2	Saline 	F	DNA	20	38.3	Mouse	Stool	96 well	A2	infectious
+5023-OC-03	5023-OC-3_S133_kneaddata_cat.fastq_profile	Experiment 47 F3	Saline 	F	DNA	20	25.7	Mouse	Stool	96 well	A3	infectious
+5023-OC-04	5023-OC-4_S134_kneaddata_cat.fastq_profile	Experiment 47 F4	Saline 	F	DNA	20	28.7	Mouse	Stool	96 well	A4	infectious
+5023-OC-05	5023-OC-5_S135_kneaddata_cat.fastq_profile	Experiment 47 F5	Saline 	F	DNA	20	20	Mouse	Stool	96 well	A5	infectious
+5023-OC-06	5023-OC-6_S136_kneaddata_cat.fastq_profile	Experiment 48 F2	Saline 	F	DNA	20	27.6	Mouse	Stool	96 well	A6	infectious
+5023-OC-07	5023-OC-7_S137_kneaddata_cat.fastq_profile	Experiment 47 M1	Saline 	M	DNA	20	21.2	Mouse	Stool	96 well	A7	infectious
+5023-OC-08	5023-OC-8_S138_kneaddata_cat.fastq_profile	Experiment 47 M2	Saline 	M	DNA	20	40.8	Mouse	Stool	96 well	A8	infectious
+5023-OC-09	5023-OC-9_S139_kneaddata_cat.fastq_profile	Experiment 47 M3	Saline 	M	DNA	20	23.4	Mouse	Stool	96 well	A9	infectious
+5023-OC-10	5023-OC-10_S140_kneaddata_cat.fastq_profile	Experiment 47 M4	Saline 	M	DNA	20	37.1	Mouse	Stool	96 well	A10	infectious
+5023-OC-11	5023-OC-11_S141_kneaddata_cat.fastq_profile	Experiment 47 M5	Saline 	M	DNA	20	18.7	Mouse	Stool	96 well	A11	infectious
+5023-OC-12	5023-OC-12_S142_kneaddata_cat.fastq_profile	Experiment 48 M1	Saline 	M	DNA	20	95.1	Mouse	Stool	96 well	A12	infectious
+5023-OC-13	5023-OC-13_S143_kneaddata_cat.fastq_profile	Experiment 48 M2	Saline 	M	DNA	20	45.9	Mouse	Stool	96 well	B1	infectious
+5023-OC-14	5023-OC-14_S144_kneaddata_cat.fastq_profile	Experiment 47 F1	Bleomycin	F	DNA	20	25.2	Mouse	Stool	96 well	B2	infectious
+5023-OC-15	5023-OC-15_S145_kneaddata_cat.fastq_profile	Experiment 47 F2	Bleomycin	F	DNA	20	16.3	Mouse	Stool	96 well	B3	infectious
+5023-OC-16	5023-OC-16_S146_kneaddata_cat.fastq_profile	Experiment 47 F3	Bleomycin	F	DNA	20	63.7	Mouse	Stool	96 well	B4	infectious
+5023-OC-17	5023-OC-17_S147_kneaddata_cat.fastq_profile	Experiment 47 F4	Bleomycin	F	DNA	20	15.7	Mouse	Stool	96 well	B5	infectious
+5023-OC-18	5023-OC-18_S148_kneaddata_cat.fastq_profile	Experiment 47 F5	Bleomycin	F	DNA	20	28.2	Mouse	Stool	96 well	B6	infectious
+5023-OC-19	5023-OC-19_S149_kneaddata_cat.fastq_profile	Experiment 48 F1	Bleomycin	F	DNA	20	21.9	Mouse	Stool	96 well	B7	infectious
+5023-OC-20	5023-OC-20_S150_kneaddata_cat.fastq_profile	Experiment 48 F2	Bleomycin	F	DNA	20	19.9	Mouse	Stool	96 well	B8	infectious
+5023-OC-21	5023-OC-21_S151_kneaddata_cat.fastq_profile	Experiment 48 F3	Bleomycin	F	DNA	20	19.5	Mouse	Stool	96 well	B9	infectious
+5023-OC-22	5023-OC-22_S152_kneaddata_cat.fastq_profile	Experiment 48 F4	Bleomycin	F	DNA	20	18.4	Mouse	Stool	96 well	B10	infectious
+5023-OC-23	5023-OC-23_S153_kneaddata_cat.fastq_profile	Experiment 47 M1	Bleomycin	M	DNA	20	15.6	Mouse	Stool	96 well	B11	infectious
+5023-OC-24	5023-OC-24_S154_kneaddata_cat.fastq_profile	Experiment 47 M2	Bleomycin	M	DNA	20	18.3	Mouse	Stool	96 well	B12	infectious
+5023-OC-25	5023-OC-25_S155_kneaddata_cat.fastq_profile	Experiment 47 M3	Bleomycin	M	DNA	20	18.2	Mouse	Stool	96 well	C1	infectious
+5023-OC-26	5023-OC-26_S156_kneaddata_cat.fastq_profile	Experiment 47 M4	Bleomycin	M	DNA	20	42.8	Mouse	Stool	96 well	C2	infectious
+5023-OC-27	5023-OC-27_S157_kneaddata_cat.fastq_profile	Experiment 47 M5	Bleomycin	M	DNA	20	19	Mouse	Stool	96 well	C3	infectious
+5023-OC-28	5023-OC-28_S158_kneaddata_cat.fastq_profile	Experiment 48 M1	Bleomycin	M	DNA	20	16	Mouse	Stool	96 well	C4	infectious
+5023-OC-29	5023-OC-29_S159_kneaddata_cat.fastq_profile	Experiment 48 M2	Bleomycin	M	DNA	20	18.7	Mouse	Stool	96 well	C5	infectious
+5023-OC-30	5023-OC-30_S160_kneaddata_cat.fastq_profile	Experiment 48 M3	Bleomycin	M	DNA	20	25.8	Mouse	Stool	96 well	C6	infectious
+5023-OC-31	5023-OC-31_S161_kneaddata_cat.fastq_profile	Experiment 48 M4	Bleomycin	M	DNA	20	14.6	Mouse	Stool	96 well	C7	infectious
+5023-OC-32	5023-OC-32_S162_kneaddata_cat.fastq_profile	Experiment 35 F3	Saline 	F	DNA	20	47.7	Mouse	Stool	96 well	C8	non-infectious
+5023-OC-33	5023-OC-33_S163_kneaddata_cat.fastq_profile	Experiment 35 M4	Saline 	M	DNA	20	57.1	Mouse	Stool	96 well	C9	non-infectious
+5023-OC-34	5023-OC-34_S164_kneaddata_cat.fastq_profile	Experiment 49 F1	Saline 	F	DNA	20	81.9	Mouse	Stool	96 well	C10	infectious
+5023-OC-35	5023-OC-35_S165_kneaddata_cat.fastq_profile	Experiment 49 F2	Saline 	F	DNA	20	35.4	Mouse	Stool	96 well	C11	infectious
+5023-OC-36	5023-OC-36_S166_kneaddata_cat.fastq_profile	Experiment 49 F3	Saline 	F	DNA	20	98.1	Mouse	Stool	96 well	C12	infectious
+5023-OC-37	5023-OC-37_S167_kneaddata_cat.fastq_profile	Experiment 49 F4	Saline 	F	DNA	20	69.7	Mouse	Stool	96 well	D1	infectious
+5023-OC-38	5023-OC-38_S168_kneaddata_cat.fastq_profile	Experiment 49 M2	Saline 	M	DNA	20	95.6	Mouse	Stool	96 well	D2	infectious
+5023-OC-39	5023-OC-39_S169_kneaddata_cat.fastq_profile	Experiment 49 M3	Saline 	M	DNA	20	50.6	Mouse	Stool	96 well	D3	infectious
+5023-OC-40	5023-OC-40_S170_kneaddata_cat.fastq_profile	Experiment 49 M4	Saline 	M	DNA	20	30.3	Mouse	Stool	96 well	D4	infectious
+5023-OC-41	5023-OC-41_S171_kneaddata_cat.fastq_profile	Experiment 49 M5	Saline 	M	DNA	20	24.2	Mouse	Stool	96 well	D5	infectious
+5023-OC-42	5023-OC-42_S172_kneaddata_cat.fastq_profile	Experiment 30 F1	Bleomycin	F	DNA	20	96.3	Mouse	Stool	96 well	D6	non-infectious
+5023-OC-43	5023-OC-43_S173_kneaddata_cat.fastq_profile	Experiment 30 F2	Bleomycin	F	DNA	20	50.1	Mouse	Stool	96 well	D7	non-infectious
+5023-OC-44	5023-OC-44_S174_kneaddata_cat.fastq_profile	Experiment 30 F3	Bleomycin	F	DNA	20	134.2	Mouse	Stool	96 well	D8	non-infectious
+5023-OC-45	5023-OC-45_S175_kneaddata_cat.fastq_profile	Experiment 30 F5	Bleomycin	F	DNA	20	173	Mouse	Stool	96 well	D9	non-infectious
+5023-OC-46	5023-OC-46_S176_kneaddata_cat.fastq_profile	Experiment 30 M4	Bleomycin	M	DNA	20	29.2	Mouse	Stool	96 well	D10	non-infectious
+5023-OC-47	5023-OC-47_S177_kneaddata_cat.fastq_profile	Experiment 30 M5	Bleomycin	M	DNA	20	187	Mouse	Stool	96 well	D11	non-infectious
+5023-OC-48	5023-OC-48_S178_kneaddata_cat.fastq_profile	Experiment 30 M6	Bleomycin	M	DNA	20	408	Mouse	Stool	96 well	D12	non-infectious
+5023-OC-49	5023-OC-49_S179_kneaddata_cat.fastq_profile	Experiment 30 M7	Bleomycin	M	DNA	20	123	Mouse	Stool	96 well	E1	non-infectious
+5023-OC-50	5023-OC-50_S180_kneaddata_cat.fastq_profile	Experiment 30 M8	Bleomycin	M	DNA	20	44.8	Mouse	Stool	96 well	E2	non-infectious
+5023-OC-51	5023-OC-51_S181_kneaddata_cat.fastq_profile	Experiment 52 F1	Bleomycin	F	DNA	20	25	Mouse	Stool	96 well	E3	germ-free
+5023-OC-52	5023-OC-52_S182_kneaddata_cat.fastq_profile	Experiment 52 F2	Bleomycin	F	DNA	20	81.1	Mouse	Stool	96 well	E4	germ-free
+5023-OC-53	5023-OC-53_S183_kneaddata_cat.fastq_profile	Experiment 52 F3	Bleomycin	F	DNA	20	116	Mouse	Stool	96 well	E5	germ-free
+5023-OC-54	5023-OC-54_S184_kneaddata_cat.fastq_profile	Experiment 52 F4	Saline 	F	DNA	20	249	Mouse	Stool	96 well	E6	germ-free
+5023-OC-55	5023-OC-55_S185_kneaddata_cat.fastq_profile	Experiment 52 F5	Saline 	F	DNA	20	106	Mouse	Stool	96 well	E7	germ-free
+5023-OC-56	5023-OC-56_S186_kneaddata_cat.fastq_profile	Experiment 52 F6	Saline 	F	DNA	20	54.9	Mouse	Stool	96 well	E8	germ-free
+5023-OC-57	5023-OC-57_S187_kneaddata_cat.fastq_profile	Experiment 52 M1	Bleomycin	M	DNA	20	50.9	Mouse	Stool	96 well	E9	germ-free
+5023-OC-58	5023-OC-58_S188_kneaddata_cat.fastq_profile	Experiment 52 M2	Bleomycin	M	DNA	20	80.7	Mouse	Stool	96 well	E10	germ-free
+5023-OC-59	5023-OC-59_S189_kneaddata_cat.fastq_profile	Experiment 52 M3	Bleomycin	M	DNA	20	45.2	Mouse	Stool	96 well	E11	germ-free
+5023-OC-60	5023-OC-60_S190_kneaddata_cat.fastq_profile	Experiment 52 M4	Saline 	M	DNA	20	81	Mouse	Stool	96 well	E12	germ-free
+5023-OC-61	5023-OC-61_S191_kneaddata_cat.fastq_profile	Experiment 52 M5	Saline 	M	DNA	20	89	Mouse	Stool	96 well	F1	germ-free
+5023-OC-62	5023-OC-62_S192_kneaddata_cat.fastq_profile	Experiment 52 M6	Saline 	M	DNA	20	219	Mouse	Stool	96 well	F2	germ-free
+5023-OC-64	5023-OC-64_S194_kneaddata_cat.fastq_profile	Experiment 52 pre environment	CONTROL	CONTROL	CONTROL	20	5.5	CONTROL	CONTROL	96 well	F4	germ-free
+5023-OC-65	5023-OC-65_S195_kneaddata_cat.fastq_profile	Experiment 52 gut environment	CONTROL	CONTROL	CONTROL	20	5.4	CONTROL	CONTROL	96 well	F5	germ-free
+5023-OC-66	5023-OC-66_S196_kneaddata_cat.fastq_profile	Kit control	CONTROL	CONTROL	CONTROL	20	0	CONTROL	CONTROL	96 well	F6	control
+5023-OC-67	5023-OC-67_S197_kneaddata_cat.fastq_profile	7th floor post environment	CONTROL	CONTROL	CONTROL	20	0	CONTROL	CONTROL	96 well	F7	non-infectious
+5023-OC-68	5023-OC-68_S198_kneaddata_cat.fastq_profile	7th floor pre environment	CONTROL	CONTROL	CONTROL	20	0	CONTROL	CONTROL	96 well	F8	non-infectious
+5023-OC-69	5023-OC-69_S199_kneaddata_cat.fastq_profile	7th floor  gut environment	CONTROL	CONTROL	CONTROL	20	6.9	CONTROL	CONTROL	96 well	F9	non-infectious
