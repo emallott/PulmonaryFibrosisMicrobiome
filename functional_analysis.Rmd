@@ -1,0 +1,238 @@
+---
+title: "Functional Analysis"
+author: "Liz Mallott"
+date: "10/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###Loading required libraries
+
+The following libraries are required for this analysis:
+tidyverse (v.1.3.0)
+vegan (v.2.5-6)
+pairwiseAdonis (v.0.3, https://github.com/pmartinezarbizu/pairwiseAdonis)
+
+```{r load_libraries}
+library(tidyverse)
+library(vegan)
+library(pairwiseAdonis)
+library(ggplot2)
+library(cowplot)
+library(glmmTMB)
+library(multcomp)
+library(car)
+library(fdrtool)
+```
+
+## Importing data
+
+Bray-Curtis and Jaccard distance matrices were created in QIIME2 for both gene family and pathway abundances so we could easily rarefy the data and remove low-abundance samples. So, we are importing those matrices here, after ensuring they 
+
+```{r import_data}
+bray_gf = as.dist(read.table("distance-matrix-bray-gf.tsv", header = T))
+bray_gf_full = as.dist(read.table("distance-matrix-bray-gf-full.tsv", header = T))
+jaccard_gf = as.dist(read.table("distance-matrix-jaccard-gf.tsv", header = T))
+jaccard_gf_full = as.dist(read.table("distance-matrix-jaccard-gf-full.tsv", header = T))
+bray_pa = as.dist(read.table("distance-matrix-bray-pa.tsv", header = T))
+bray_pa_full = as.dist(read.table("distance-matrix-bray-pa-full.tsv", header = T))
+jaccard_pa = as.dist(read.table("distance-matrix-jaccard-pa.tsv", header = T))
+jaccard_pa_full = as.dist(read.table("distance-matrix-jaccard-pa-full.tsv", header = T))
+
+metadata_gf = read.csv("chioma_Sept20_metadata_gf.csv", header = T)
+metadata_gf_full = read.csv("chioma_Sept20_metadata_gf_full.csv", header = T)
+metadata_pa = read.csv("chioma_Sept20_metadata_pa.csv", header = T)
+metadata_pa_full = read.csv("chioma_Sept20_metadata_pa_full.csv", header = T)
+```
+
+## PERMANOVAs
+
+A PERMANOVA is performed to assess the influence of both floor (7th vs. 8th vs. germ-free) and treatment (bleomycin vs. saline). 
+
+We will first look at pathway abundance taking abundance into account (Bray-Curtis metric), running matrices rarefied at two different depths.
+
+```{r permanova_bray_pa}
+adonis2(bray_pa ~ Floor + Treatment, data = metadata_pa, 
+        by = "margin", permutations = 4999)
+adonis2(bray_pa_full ~ Floor + Treatment, data = metadata_pa_full, 
+        by = "margin", permutations = 4999)
+```
+
+And then at presence-absence (Jaccard metric).
+
+```{r permanova_jaccard_pa}
+adonis2(jaccard_pa ~ Floor + Treatment, data = metadata_pa, 
+        by = "margin", permutations = 4999)
+adonis2(jaccard_pa_full ~ Floor + Treatment, data = metadata_pa_full, 
+        by = "margin", permutations = 4999)
+```
+
+Pairwise comparisons between floors for the dataset that still includes germ free treatments are also performed.
+
+```{r pairwise_bray_pa}
+pairwise.adonis(bray_pa_full, factors = metadata_pa_full$Floor, perm = 4999, p.adjust.m = "holm")
+```
+
+```{r pairwise_jaccard_pa}
+pairwise.adonis(jaccard_gf_full, factors = metadata_gf_full$Floor, perm = 4999, p.adjust.m = "holm")
+```
+
+We will then look at gene family abundance taking abundance into account (Bray-Curtis metric), running matrices rarefied at two different depths.
+
+```{r permanova_bray_gf}
+adonis2(bray_gf ~ Floor + Treatment, data=metadata_gf, 
+        by = "margin", permutations = 4999)
+adonis2(bray_gf_full ~ Floor + Treatment, data=metadata_gf_full, 
+        by = "margin", permutations = 4999)
+```
+
+And then at presence-absence (Jaccard metric).
+
+```{r permanova_jaccard_gf}
+adonis2(jaccard_gf ~ Floor + Treatment, data=metadata_gf, 
+        by = "margin", permutations = 4999)
+adonis2(jaccard_gf_full ~ Floor + Treatment, data=metadata_gf_full, 
+        by = "margin", permutations = 4999)
+```
+
+Pairwise comparisons between floors are also performed.
+
+```{r pairwise_bray_gf}
+pairwise.adonis(bray_gf_full, factors = metadata_gf_full$Floor, perm = 4999, p.adjust.m = "holm")
+```
+
+```{r pairwise_jaccard_gf}
+pairwise.adonis(jaccard_gf_full, factors = metadata_gf_full$Floor, perm = 4999, p.adjust.m = "holm")
+```
+
+
+## NMDS plots
+
+We constructed a non-linear multidimensional scaling plot for the Bray-Curtis metric using the larger datasets for both pathway abundance and gene families.
+
+```{r nmds}
+mds_bray_pa<-metaMDS(bray_pa_full, k=2, trymax=500)
+mds_bray_pa_points<-mds_bray_pa$points
+mds_bray_pa_points2<-merge(x=mds_bray_pa_points, y = metadata_pa_full, 
+                                  by.x = "row.names", by.y = "sample.id")
+braypa <- ggplot(mds_bray_pa_points2, aes(x = MDS1, y = MDS2, 
+                                                 color = Floor, shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set1') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) + 
+  ggtitle("Pathway abundance")
+braypa
+
+mds_bray_gf<-metaMDS(bray_gf_full, k=2, trymax=500)
+mds_bray_gf_points<-mds_bray_gf$points
+mds_bray_gf_points2<-merge(x=mds_bray_gf_points, y = metadata_gf_full, 
+                                  by.x = "row.names", by.y = "sample.id")
+braygf <- ggplot(mds_bray_gf_points2, aes(x = MDS1, y = MDS2, 
+                                                 color = Floor, shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set1') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) + 
+  ggtitle("Gene families")
+braygf
+
+tiff(file = "nmds_plot_combined_shotgun.tif", res = 300, width = 18, height = 7, units="in")
+legend1 = get_legend(braygf + theme(legend.box.margin = margin(0, 0, 0, 12)))
+plot_grid(braygf + theme(legend.position = "none"), 
+          braypa + theme(legend.position = "none"), legend1, 
+          nrow = 1, ncol = 3, rel_widths = c(1.5, 1.5, 0.75), align = "h", 
+          axis = "t")
+dev.off()
+```
+PDF plots are included below
+```{r bray_pdf}
+pdf(file="nmds_plot_combined_shotgun.pdf", width=18, height=7)
+legend1 = get_legend(braygf + theme(legend.box.margin = margin(0, 0, 0, 12)))
+plot_grid(braygf + theme(legend.position = "none"), 
+          braypa + theme(legend.position = "none"), legend1, 
+          nrow = 1, ncol = 3, rel_widths = c(1.5, 1.5, 0.75), align = "h", 
+          axis = "t")
+dev.off()
+```
+## Individual pathway differences
+
+We ran a generalized linear model with a negative binomial distribution to assess the influence of treatment and floor on the relative abundance of all pathways detected.
+
+```{r path_comp}
+paths = read_tsv("chioma_pathabundance_relab_unstratified.tsv")
+paths_t = paths[, colSums(paths != 0) > 0] %>% pivot_longer(-Pathway) %>% 
+  pivot_wider(names_from=Pathway, values_from=value)
+
+metadata = read_tsv("chioma_Sept20_metadata_function.txt", col_types = "cccfffddfffcf")
+
+paths_meta = inner_join(metadata, paths_t, by = "name") %>% filter(Treatment == "Saline" | Treatment == "Bleomycin") 
+
+
+paths_meta = as.data.frame(paths_meta)
+
+glht_glmmTMB <- function (model, ..., component="cond") {
+  glht(model, ...,
+       coef. = function(x) fixef(x)[[component]],
+       vcov. = function(x) vcov(x)[[component]],
+       df = NULL)
+}
+modelparm.glmmTMB <- function (model, coef. = function(x) fixef(x)[[component]],
+                               vcov. = function(x) vcov(x)[[component]],
+                               df = NULL, component="cond", ...) {
+  multcomp:::modelparm.default(model, coef. = coef., vcov. = vcov.,
+                               df = df, ...)
+}
+
+floor_estimatematrix = mat.or.vec(301,2)
+floor_pvaluematrix = mat.or.vec(301,2)
+treatment_estimatematrix = mat.or.vec(301,2)
+treatment_pvaluematrix = mat.or.vec(301,2)
+
+for(i in 14:314) {
+  variable = paths_meta[,i]
+  b = try(glmmTMB(variable ~ Floor + Treatment, 
+                  data = paths_meta, family = nbinom2))
+  anova = Anova(b)
+  floor_estimatematrix[i-13,2] = anova[1,1]
+  floor_pvaluematrix[i-13,2] = anova[1,3]
+  treatment_estimatematrix[i-13,2] = anova[2,1]
+  treatment_pvaluematrix[i-13,2] = anova[2,3]
+  floor_estimatematrix[i-13,1] = names(paths_meta)[i]
+  floor_pvaluematrix[i-13,1] = names(paths_meta)[i]
+  treatment_estimatematrix[i-13,1] = names(paths_meta)[i]
+  treatment_pvaluematrix[i-13,1] = names(paths_meta)[i]
+}
+
+floor = bind_cols(as.data.frame(floor_estimatematrix[,1:2]), 
+                     as.data.frame(floor_pvaluematrix[,2]))
+write.csv(floor, "floor_pathways.csv")
+floor_nona = filter(floor, floor[,3] != "NaN") 
+floor_nona[,3] = as.numeric(as.character(floor_nona[,3]))
+floor_corrected = bind_cols(floor_nona, 
+                               as.data.frame(fdrtool(floor_nona[,3], 
+                                                     statistic = "pvalue", plot = F)))
+write.csv(floor_corrected, "floor_corrected_pathways.csv")
+
+treatment = bind_cols(as.data.frame(treatment_estimatematrix[,1:2]), 
+                      as.data.frame(treatment_pvaluematrix[,2]))
+write.csv(treatment, "treatment_pathways.csv")
+treatment_nona = filter(treatment, treatment[,3] != "NaN") 
+treatment_nona[,3] = as.numeric(as.character(treatment_nona[,3]))
+treatment_corrected = bind_cols(treatment_nona, 
+                                as.data.frame(fdrtool(treatment_nona[,3], 
+                                                      statistic = "pvalue", plot = F)))
+write.csv(treatment_corrected, "treatment_corrected_pathways.csv")
+
+```
