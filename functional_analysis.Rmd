@@ -26,6 +26,7 @@ library(glmmTMB)
 library(multcomp)
 library(car)
 library(fdrtool)
+library(pheatmap)
 ```
 
 ## Importing data
@@ -258,6 +259,36 @@ treatment_corrected = bind_cols(treatment_nona,
                                                       statistic = "pvalue", plot = F)))
 write.csv(treatment_corrected, "treatment_corrected_pathways.csv")
 
+```
+
+## Pathway heat map
+
+```{r heatmap}
+cal_z_score <- function(x){
+  (x - mean(x)) / sd(x)
+}
+paths_subset = paths_meta %>% 
+  mutate(total = rowSums(paths_meta[,14:314])) %>% 
+  filter(total > 0) %>% 
+  select_if(~ !is.numeric(.) || sum(.) != 0) %>% 
+  dplyr::select(2, 14:303) %>% 
+  pivot_longer(-1, names_repair = "unique") %>% 
+  pivot_wider(names_from = name...1, values_from = value) %>% 
+  column_to_rownames(var = "name...2")
+paths_norm = t(apply(paths_subset, 1, cal_z_score))
+my_sample_col = data.frame(Floor = paths_meta$Floor, Treatment = paths_meta$Treatment)
+row.names(my_sample_col) <- colnames(paths_subset)
+my_color = list(Floor = c(ABSL2 = "#e41a1c", ABSL1 = "#377eb8", `Germ-free`
+                          = "#4daf4a"), 
+                Treatment = c(Bleomycin = "black", Saline = "grey"))
+heatmap = pheatmap(paths_norm, show_colnames = F, cluster_rows = F,
+         annotation_col = my_sample_col, show_rownames = F,
+         annotation_names_col = F, 
+         annotation_colors = my_color,
+         clustering_method = "ward.D")
+tiff(file = "heatmap_pathwayabundances.tif", res = 300, width = 5, height = 7, units="in")
+heatmap
+dev.off()
 ```
 
 ## Individual COG differences
