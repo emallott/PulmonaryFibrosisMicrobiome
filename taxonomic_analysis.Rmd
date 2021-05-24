@@ -35,14 +35,18 @@ library(ggpubr)
 
 ## Importing data
 
-The species-level merged relative abundance table from MetaPhlan and metadata files are loaded. Samples with no reads mapping to bacteria (9 germ-free samples) and all control samples are removed and the relative abundance table is transposed for ease of use in vegan.
+The species-level merged relative abundance table from MetaPhlan and metadata files are loaded. All germ-free and all control samples are removed and the relative abundance table is transposed for ease of use in vegan.
 
 ```{r import_data}
 species = read_tsv("merged_abundance_table_species.txt")
+phyla = read_tsv("merged_abundance_table_phyla.txt")
+phyla_t = phyla %>% 
+  pivot_longer(!Sample:Treatment, names_to = "Phyla", values_to = "Relative abundance")
 metadata = read_tsv("chioma_Sept20_metadata.txt", col_types = "cccfffddfffcf")
 species_t = species[, colSums(species != 0) > 0] %>% pivot_longer(-body_site) %>% 
   pivot_wider(names_from=body_site, values_from=value)
-species_meta = inner_join(metadata, species_t) %>% filter(Treatment == "Saline" | Treatment == "Bleomycin") 
+species_meta = inner_join(metadata, species_t) %>% filter(Treatment == "Saline" | Treatment == "Bleomycin") %>% 
+  filter(Floor != "Germ-free")
 ```
 
 ## Calculating distance matrices
@@ -56,7 +60,7 @@ jaccard = vegdist(species_meta[14:55], method = "jaccard")
 
 ## PERMANOVAs
 
-A PERMANOVA is performed to assess the influence of both floor (7th vs. 8th vs. germ-free) and treatment (bleomycin vs. saline). 
+A PERMANOVA is performed to assess the influence of both floor (ABSL1 vs. ABSL2) and treatment (bleomycin vs. saline). 
 
 We will first look at composition taking species abundance into account (Bray-Curtis metric).
 
@@ -72,14 +76,18 @@ adonis2(jaccard ~ Floor + Treatment, data=species_meta,
         by = "margin", permutations = 4999)
 ```
 
-Pairwise comparisons between floors are also performed.
+## Phyla bar plots
 
-```{r pairwise_bray}
-pairwise.adonis(bray, factors = species_meta$Floor, perm = 4999, p.adjust.m = "holm")
-```
+After collapsing the table at the phyla level, we constructed bar plots to visualize differences between the ABSL1 and ABSL2 floors.
 
-```{r pairwise_jaccard}
-pairwise.adonis(jaccard, factors = species_meta$Floor, perm = 4999, p.adjust.m = "holm")
+```{r barplot}
+tiff(file="phyla_barplot.tif", res=300, width=12, height=6.5, units="in")
+phyla_plot = ggbarplot(phyla_t, x = "Sample", y = "Relative abundance",
+          fill = "Phyla", color = "Phyla", palette = "Set1",
+          width = 1)
+ggpar(phyla_plot, legend = "right") +  
+          rremove("x.text") + rremove("xlab")
+dev.off()
 ```
 
 ## NMDS plots
@@ -87,13 +95,21 @@ pairwise.adonis(jaccard, factors = species_meta$Floor, perm = 4999, p.adjust.m =
 We constructed a non-linear multidimensional scaling plot for the Bray-Curtis metric.
 
 ```{r nmds_bray}
-mds_otus_bray<-metaMDS(bray, k=2, trymax=500)
+mds_otus_bray<-metaMDS(bray, k=2, trymax=499)
 mds_otus_bray_points<-mds_otus_bray$points
-mds_otus_bray_points2<-merge(x=mds_otus_bray_points, y = species_meta, 
-                                  by.x = "row.names", by.y = "row.names")
+mds_otus_bray_points2<-merge(x=mds_otus_bray_points, 
+                             y = species_meta, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mds_otus_bray_points2$Floor = factor(mds_otus_bray_points2$Floor,
+                                     levels = c("ABSL1", "ABSL2",
+                                                "Germ-free"))
+
 tiff(file="nmds_plot_bray.tif", res=300, width=8, height=6, units="in")
-bray <- ggplot(mds_otus_bray_points2, aes(x = MDS1, y = MDS2, 
-                                                 color = Floor, shape = Treatment)) +
+bray_plot <- ggplot(mds_otus_bray_points2, 
+                    aes(x = MDS1, y = MDS2, color = Floor, 
+                        shape = Treatment)) +
   geom_point(size=3) + scale_color_brewer(palette = 'Set1') +
   theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
         legend.key=element_blank()) + 
@@ -101,11 +117,10 @@ bray <- ggplot(mds_otus_bray_points2, aes(x = MDS1, y = MDS2,
         axis.title.y=element_text(size=rel(2)),
         plot.title = element_text(size=rel(3)),
         legend.title = element_text(size=rel(2)),
-        legend.text = element_text(size = rel(1.8))) + 
-  ggtitle("Bray-Curtis")
-bray
+        legend.text = element_text(size = rel(1.8)))
+bray_plot
 dev.off()
-bray
+bray_plot
 ```
 PDF plots are included below
 ```{r bray_pdf}
@@ -114,9 +129,113 @@ bray
 dev.off()
 ```
 
+## Alpha diversity
+```{r alpha}
+shannond = diversity(species_meta[,14:55], index = "shannon")
+
+shannone = shannond/log(specnumber(species_meta[,14:55]))
+
+diversity = cbind(species_meta[,1:14], shannond, shannone)
+
+diversity$Floor = factor(diversity$Floor,
+                                     levels = c("ABSL1", "ABSL2",
+                                                "Germ-free"))
+
+div = kruskal.test(shannond ~ Floor, 
+                        data = diversity)
+div
+
+divt = kruskal.test(shannond ~ Treatment, 
+                        data = diversity)
+divt
+
+even = kruskal.test(shannone ~ Floor, 
+                        data = diversity)
+even
+
+diversity_nogerm = diversity %>% filter(Floor != "Germ-free")
+
+div = wilcox.test(shannond ~ Floor, 
+                        data = diversity_nogerm)
+div
+
+divt = wilcox.test(shannond ~ Treatment, 
+                        data = diversity_nogerm)
+divt
+
+div_lm = lm(shannond ~ Floor*Treatment, 
+            data = diversity_nogerm)
+Anova(div_lm)
+
+even = wilcox.test(shannone ~ Floor, 
+                        data = diversity_nogerm)
+even
+
+div_plot = ggboxplot(diversity_nogerm, x = "Floor", 
+                    y = "shannond", color = "Floor", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Shannon Diversity") 
+div_plot = ggpar(div_plot, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+div_plot
+
+even_plot = ggboxplot(diversity_nogerm, x = "Floor", 
+                    y = "shannone", color = "Floor", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Shannon Evenness") 
+even_plot = ggpar(even_plot, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+even_plot
+
+tiff(file="Floor_diversity.tif", res=300, width=4, height=3, units="in")
+div_plot
+dev.off()
+```
+
 ## Individual taxonomic differences
 
-We ran a generalized linear model with a negative binomial distribution to assess the influence of treatment and floor on the relative abundance of all species detected.
+We ran a generalized linear model with a negative binomial distribution to assess the influence of treatment and floor on the relative abundance of all phyla and species detected.
+
+```{r phyla_comp}
+glht_glmmTMB <- function (model, ..., component="cond") {
+  glht(model, ...,
+       coef. = function(x) fixef(x)[[component]],
+       vcov. = function(x) vcov(x)[[component]],
+       df = NULL)
+}
+modelparm.glmmTMB <- function (model, coef. = function(x) fixef(x)[[component]],
+                               vcov. = function(x) vcov(x)[[component]],
+                               df = NULL, component="cond", ...) {
+  multcomp:::modelparm.default(model, coef. = coef., vcov. = vcov.,
+                               df = df, ...)
+}
+
+actino = glmmTMB(Actinobacteria ~ Floor + Treatment, 
+                  data = phyla, family = nbinom2)
+Anova(actino)
+
+bact = glmmTMB(Bacteroidetes ~ Floor + Treatment, 
+                  data = phyla, family = nbinom2)
+Anova(bact)
+
+firm = glmmTMB(Firmicutes ~ Floor + Treatment, 
+                  data = phyla, family = nbinom2)
+Anova(firm)
+
+proteo = glmmTMB(Proteobacteria ~ Floor + Treatment, 
+                  data = phyla, family = nbinom2)
+Anova(proteo)
+
+verru = glmmTMB(Verrucomicrobia ~ Floor + Treatment, 
+                  data = phyla, family = nbinom2)
+Anova(verru)
+```
 
 ```{r taxa_comp}
 species_meta_comp = as.data.frame(species_meta)
@@ -181,11 +300,78 @@ Anova(a)
 summary(glht(a,linfct=mcp(Floor="Tukey")))
 ```
 
+```{r taxa_comp_nog}
+species_meta_comp = as.data.frame(species_meta) %>% 
+  filter(Floor != "Germ-free")
+
+glht_glmmTMB <- function (model, ..., component="cond") {
+  glht(model, ...,
+       coef. = function(x) fixef(x)[[component]],
+       vcov. = function(x) vcov(x)[[component]],
+       df = NULL)
+}
+modelparm.glmmTMB <- function (model, coef. = function(x) fixef(x)[[component]],
+                               vcov. = function(x) vcov(x)[[component]],
+                               df = NULL, component="cond", ...) {
+  multcomp:::modelparm.default(model, coef. = coef., vcov. = vcov.,
+                               df = df, ...)
+}
+
+floor_estimatematrix = mat.or.vec(42,2)
+floor_pvaluematrix = mat.or.vec(42,2)
+treatment_estimatematrix = mat.or.vec(42,2)
+treatment_pvaluematrix = mat.or.vec(42,2)
+
+for(i in 14:55) {
+  variable = species_meta_comp[,i]
+  b = try(glmmTMB(variable ~ Floor + Treatment, 
+                  data = species_meta_comp, family = nbinom2))
+  anova = Anova(b)
+  floor_estimatematrix[i-13,2] = anova[1,1]
+  floor_pvaluematrix[i-13,2] = anova[1,3]
+  treatment_estimatematrix[i-13,2] = anova[2,1]
+  treatment_pvaluematrix[i-13,2] = anova[2,3]
+  floor_estimatematrix[i-13,1] = names(species_meta_comp)[i]
+  floor_pvaluematrix[i-13,1] = names(species_meta_comp)[i]
+  treatment_estimatematrix[i-13,1] = names(species_meta_comp)[i]
+  treatment_pvaluematrix[i-13,1] = names(species_meta_comp)[i]
+}
+
+floor = bind_cols(as.data.frame(floor_estimatematrix[,1:2]), 
+                     as.data.frame(floor_pvaluematrix[,2]))
+write.csv(floor, "floor_nogerm.csv")
+floor_nona = filter(floor, floor[,3] != "NaN") 
+floor_nona[,3] = as.numeric(as.character(floor_nona[,3]))
+floor_corrected = bind_cols(floor_nona, 
+                               as.data.frame(fdrtool(floor_nona[,3], 
+                                                     statistic = "pvalue", plot = F)))
+write.csv(floor_corrected, "floor_nogerm_corrected.csv")
+
+treatment = bind_cols(as.data.frame(treatment_estimatematrix[,1:2]), 
+                      as.data.frame(treatment_pvaluematrix[,2]))
+write.csv(treatment, "treatment_nogerm.csv")
+treatment_nona = filter(treatment, treatment[,3] != "NaN") 
+treatment_nona[,3] = as.numeric(as.character(treatment_nona[,3]))
+treatment_corrected = bind_cols(treatment_nona, 
+                                as.data.frame(fdrtool(treatment_nona[,3], 
+                                                      statistic = "pvalue", plot = F)))
+write.csv(treatment_corrected, "treatment_nogerm_corrected.csv")
+
+a = glmmTMB(Parasutterella_excrementihominis ~ Floor + Treatment, 
+            data = species_meta_comp, family = nbinom2)
+summary(a)
+Anova(a)
+summary(glht(a,linfct=mcp(Floor="Tukey")))
+```
 ## Single Taxa Graphs
 
 One taxa, Parasutterella excrementihominis, was more abundant in mice on the non-infectious floor compared with both the infectious and germ-free floors.
 
 ```{r graphs}
+species_meta_comp$Floor = factor(species_meta_comp$Floor,
+                                     levels = c("ABSL1", "ABSL2",
+                                                "Germ-free"))
+
 para = ggboxplot(species_meta_comp, x = "Floor", 
                     y = "Parasutterella_excrementihominis", color = "Floor", 
                     palette = "Set1", add = "jitter", 
@@ -206,4 +392,231 @@ And PDF output
 pdf("Floor_taxa.pdf", width = 4, height = 3)
 para
 dev.off()
+```
+
+#Integrating physiological data with taxonomic data
+
+In order to identify if the relative abundance of any taxa were associated with weight loss, gp130 content, or immune markers.
+
+```{r import_physio}
+phys_data = read_csv("physiology_data.csv")
+species_meta_phys = species_meta %>% 
+  left_join(phys_data, by = "#sampleid")
+species_meta_phys2 = as.data.frame(species_meta_phys)
+```
+
+We ran Spearman correlations to assess the influence of physiological variables on the relative abundance of all species detected.
+
+```{r taxa_weight}
+weight_estimatematrix = mat.or.vec(42,2)
+weight_pvaluematrix = mat.or.vec(42,2)
+
+for(i in 14:55) {
+  variable = species_meta_phys2[,i]
+  a = cor.test(x = variable, 
+               y = species_meta_phys2$`Weight Loss`, 
+                  data = species_meta_phys2,
+               method = "spearman",
+               na.action = na.omit)
+  p = a$'p.value'
+  e = a$'estimate'
+  weight_estimatematrix[i-13,1] = names(species_meta_phys2)[i]
+  weight_pvaluematrix[i-13,1] = names(species_meta_phys2)[i]
+  weight_estimatematrix[i-13,2] = e[[1]]
+  weight_pvaluematrix[i-13,2] = p
+}
+
+weight = bind_cols(as.data.frame(weight_estimatematrix[,1:2]), 
+                     as.data.frame(weight_pvaluematrix[,2]))
+write.csv(weight, "weight_loss.csv")
+weight_nona = filter(weight, weight[,3] != "NaN") 
+weight_nona[,3] = as.numeric(as.character(weight_nona[,3]))
+weight_corrected = bind_cols(weight_nona, 
+                               as.data.frame(fdrtool(weight_nona[,3], statistic = "pvalue", 
+                                                     plot = F)))
+write.csv(weight_corrected, "weight_loss_corrected.csv")
+```
+
+And then collagen content
+
+```{r taxa_collagen}
+collagen_estimatematrix = mat.or.vec(42,2)
+collagen_pvaluematrix = mat.or.vec(42,2)
+
+for(i in 14:55) {
+  variable = species_meta_phys2[,i]
+  a = cor.test(x = variable, 
+               y = species_meta_phys2$`Collagen Content`, 
+                  data = species_meta_phys2,
+               method = "spearman",
+               na.action = na.omit)
+  p = a$'p.value'
+  e = a$'estimate'
+  collagen_estimatematrix[i-13,1] = names(species_meta_phys2)[i]
+  collagen_pvaluematrix[i-13,1] = names(species_meta_phys2)[i]
+  collagen_estimatematrix[i-13,2] = e[[1]]
+  collagen_pvaluematrix[i-13,2] = p
+}
+
+collagen = bind_cols(as.data.frame(collagen_estimatematrix[,1:2]), 
+                     as.data.frame(collagen_pvaluematrix[,2]))
+write.csv(collagen, "collagen_loss.csv")
+collagen_nona = filter(collagen, collagen[,3] != "NaN") 
+collagen_nona[,3] = as.numeric(as.character(collagen_nona[,3]))
+collagen_corrected = bind_cols(collagen_nona, 
+                               as.data.frame(fdrtool(collagen_nona[,3], statistic = "pvalue", 
+                                                     plot = F)))
+write.csv(collagen_corrected, "collagen_loss_corrected.csv")
+```
+CD4+IL-6+T cells
+```{r taxa_il6}
+il6_estimatematrix = mat.or.vec(42,2)
+il6_pvaluematrix = mat.or.vec(42,2)
+
+for(i in 14:55) {
+  variable = species_meta_phys2[,i]
+  a = cor.test(x = variable, 
+               y = species_meta_phys2$`CD4+IL-6+ T cells`, 
+                  data = species_meta_phys2,
+               method = "spearman",
+               na.action = na.omit)
+  p = a$'p.value'
+  e = a$'estimate'
+  il6_estimatematrix[i-13,1] = names(species_meta_phys2)[i]
+  il6_pvaluematrix[i-13,1] = names(species_meta_phys2)[i]
+  il6_estimatematrix[i-13,2] = e[[1]]
+  il6_pvaluematrix[i-13,2] = p
+}
+
+il6 = bind_cols(as.data.frame(il6_estimatematrix[,1:2]), 
+                     as.data.frame(il6_pvaluematrix[,2]))
+write.csv(il6, "il6_loss.csv")
+il6_nona = filter(il6, il6[,3] != "NaN") 
+il6_nona[,3] = as.numeric(as.character(il6_nona[,3]))
+il6_corrected = bind_cols(il6_nona, 
+                               as.data.frame(fdrtool(il6_nona[,3], statistic = "pvalue", 
+                                                     plot = F)))
+write.csv(il6_corrected, "il6_loss_corrected.csv")
+```
+CD4+PD-1+T cells
+```{r taxa_pd1}
+pd1_estimatematrix = mat.or.vec(42,2)
+pd1_pvaluematrix = mat.or.vec(42,2)
+
+for(i in 14:55) {
+  variable = species_meta_phys2[,i]
+  a = cor.test(x = variable, 
+               y = species_meta_phys2$`CD4+PD-1+ T cells`, 
+                  data = species_meta_phys2,
+               method = "spearman",
+               na.action = na.omit)
+  p = a$'p.value'
+  e = a$'estimate'
+  pd1_estimatematrix[i-13,1] = names(species_meta_phys2)[i]
+  pd1_pvaluematrix[i-13,1] = names(species_meta_phys2)[i]
+  pd1_estimatematrix[i-13,2] = e[[1]]
+  pd1_pvaluematrix[i-13,2] = p
+}
+
+pd1 = bind_cols(as.data.frame(pd1_estimatematrix[,1:2]), 
+                     as.data.frame(pd1_pvaluematrix[,2]))
+write.csv(pd1, "pd1_loss.csv")
+pd1_nona = filter(pd1, pd1[,3] != "NaN") 
+pd1_nona[,3] = as.numeric(as.character(pd1_nona[,3]))
+pd1_corrected = bind_cols(pd1_nona, 
+                               as.data.frame(fdrtool(pd1_nona[,3], statistic = "pvalue", 
+                                                     plot = F)))
+write.csv(pd1_corrected, "pd1_loss_corrected.csv")
+```
+
+CD4+PD-1+IL-17A+T cells
+
+```{r taxa_il17}
+il17_estimatematrix = mat.or.vec(42,2)
+il17_pvaluematrix = mat.or.vec(42,2)
+
+for(i in 14:55) {
+  variable = species_meta_phys2[,i]
+  a = cor.test(x = variable, 
+               y = species_meta_phys2$`CD4+PD-1+IL-17A+ T cells`, 
+                  data = species_meta_phys2,
+               method = "spearman",
+               na.action = na.omit)
+  p = a$'p.value'
+  e = a$'estimate'
+  il17_estimatematrix[i-13,1] = names(species_meta_phys2)[i]
+  il17_pvaluematrix[i-13,1] = names(species_meta_phys2)[i]
+  il17_estimatematrix[i-13,2] = e[[1]]
+  il17_pvaluematrix[i-13,2] = p
+}
+
+il17 = bind_cols(as.data.frame(il17_estimatematrix[,1:2]), 
+                     as.data.frame(il17_pvaluematrix[,2]))
+write.csv(il17, "il17_loss.csv")
+il17_nona = filter(il17, il17[,3] != "NaN") 
+il17_nona[,3] = as.numeric(as.character(il17_nona[,3]))
+il17_corrected = bind_cols(il17_nona, 
+                               as.data.frame(fdrtool(il17_nona[,3], statistic = "pvalue", 
+                                                     plot = F)))
+write.csv(il17_corrected, "il17_loss_corrected.csv")
+```
+CD4+pSTAT3+T cells
+```{r taxa_pstat3}
+pstat3_estimatematrix = mat.or.vec(42,2)
+pstat3_pvaluematrix = mat.or.vec(42,2)
+
+for(i in 14:55) {
+  variable = species_meta_phys2[,i]
+  a = cor.test(x = variable, 
+               y = species_meta_phys2$`CD4+pSTAT3+ T cells`, 
+                  data = species_meta_phys2,
+               method = "spearman",
+               na.action = na.omit)
+  p = a$'p.value'
+  e = a$'estimate'
+  pstat3_estimatematrix[i-13,1] = names(species_meta_phys2)[i]
+  pstat3_pvaluematrix[i-13,1] = names(species_meta_phys2)[i]
+  pstat3_estimatematrix[i-13,2] = e[[1]]
+  pstat3_pvaluematrix[i-13,2] = p
+}
+
+pstat3 = bind_cols(as.data.frame(pstat3_estimatematrix[,1:2]), 
+                     as.data.frame(pstat3_pvaluematrix[,2]))
+write.csv(pstat3, "pstat3_loss.csv")
+pstat3_nona = filter(pstat3, pstat3[,3] != "NaN") 
+pstat3_nona[,3] = as.numeric(as.character(pstat3_nona[,3]))
+pstat3_corrected = bind_cols(pstat3_nona, 
+                               as.data.frame(fdrtool(pstat3_nona[,3], statistic = "pvalue", 
+                                                     plot = F)))
+write.csv(pstat3_corrected, "pstat3_loss_corrected.csv")
+```
+CD4+gp130+T cells
+```{r taxa_gp130}
+gp130_estimatematrix = mat.or.vec(42,2)
+gp130_pvaluematrix = mat.or.vec(42,2)
+
+for(i in 14:55) {
+  variable = species_meta_phys2[,i]
+  a = cor.test(x = variable, 
+               y = species_meta_phys2$`CD4+gp130+ T cells`, 
+                  data = species_meta_phys2,
+               method = "spearman",
+               na.action = na.omit)
+  p = a$'p.value'
+  e = a$'estimate'
+  gp130_estimatematrix[i-13,1] = names(species_meta_phys2)[i]
+  gp130_pvaluematrix[i-13,1] = names(species_meta_phys2)[i]
+  gp130_estimatematrix[i-13,2] = e[[1]]
+  gp130_pvaluematrix[i-13,2] = p
+}
+
+gp130 = bind_cols(as.data.frame(gp130_estimatematrix[,1:2]), 
+                     as.data.frame(gp130_pvaluematrix[,2]))
+write.csv(gp130, "gp130_loss.csv")
+gp130_nona = filter(gp130, gp130[,3] != "NaN") 
+gp130_nona[,3] = as.numeric(as.character(gp130_nona[,3]))
+gp130_corrected = bind_cols(gp130_nona, 
+                               as.data.frame(fdrtool(gp130_nona[,3], statistic = "pvalue", 
+                                                     plot = F)))
+write.csv(gp130_corrected, "gp130_loss_corrected.csv")
 ```

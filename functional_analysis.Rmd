@@ -138,9 +138,10 @@ pairwise.adonis(jaccard_cog_full, factors = metadata_cog_full$Floor, perm = 4999
 We constructed a non-linear multidimensional scaling plot for the Bray-Curtis metric using the larger datasets for both pathway abundance and gene families.
 
 ```{r nmds}
-mds_bray_pa<-metaMDS(bray_pa_full, k=2, trymax=500)
+mds_bray_pa<-metaMDS(bray_pa, k=2, trymax=499)
 mds_bray_pa_points<-mds_bray_pa$points
-mds_bray_pa_points2<-merge(x=mds_bray_pa_points, y = metadata_pa_full, 
+mds_bray_pa_points2<-merge(x=mds_bray_pa_points, 
+                           y = metadata_pa, 
                                   by.x = "row.names", by.y = "sample.id")
 braypa <- ggplot(mds_bray_pa_points2, aes(x = MDS1, y = MDS2, 
                                                  color = Floor, shape = Treatment)) +
@@ -155,9 +156,10 @@ braypa <- ggplot(mds_bray_pa_points2, aes(x = MDS1, y = MDS2,
   ggtitle("Pathway abundance")
 braypa
 
-mds_bray_gf<-metaMDS(bray_gf_full, k=2, trymax=500)
+mds_bray_gf<-metaMDS(bray_gf, k=2, trymax=499)
 mds_bray_gf_points<-mds_bray_gf$points
-mds_bray_gf_points2<-merge(x=mds_bray_gf_points, y = metadata_gf_full, 
+mds_bray_gf_points2<-merge(x=mds_bray_gf_points, 
+                           y = metadata_gf, 
                                   by.x = "row.names", by.y = "sample.id")
 braygf <- ggplot(mds_bray_gf_points2, aes(x = MDS1, y = MDS2, 
                                                  color = Floor, shape = Treatment)) +
@@ -172,17 +174,59 @@ braygf <- ggplot(mds_bray_gf_points2, aes(x = MDS1, y = MDS2,
   ggtitle("Gene families")
 braygf
 
-tiff(file = "nmds_plot_combined_shotgun.tif", res = 300, width = 18, height = 7, units="in")
+mds_jacc_pa<-metaMDS(jaccard_pa, k=2, trymax=499)
+mds_jacc_pa_points<-mds_jacc_pa$points
+mds_jacc_pa_points2<-merge(x=mds_jacc_pa_points, 
+                           y = metadata_pa, 
+                                  by.x = "row.names", by.y = "sample.id")
+jaccpa <- ggplot(mds_jacc_pa_points2, aes(x = MDS1, y = MDS2, 
+                                                 color = Floor, shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set1') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8)))
+jaccpa
+
+mds_jacc_gf<-metaMDS(jaccard_gf, k=2, trymax=499)
+mds_jacc_gf_points<-mds_jacc_gf$points
+mds_jacc_gf_points2<-merge(x=mds_jacc_gf_points, 
+                           y = metadata_gf, 
+                                  by.x = "row.names", by.y = "sample.id")
+jaccgf <- ggplot(mds_jacc_gf_points2, aes(x = MDS1, y = MDS2, 
+                                                 color = Floor, shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set1') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) 
+jaccgf
+```
+
+```{r nmds_shot_plot}
+tiff(file = "nmds_plot_combined_shotgun_nogf.tif", res = 300, width = 18, height = 14, units="in")
 legend1 = get_legend(braygf + theme(legend.box.margin = margin(0, 0, 0, 12)))
-plot_grid(braygf + theme(legend.position = "none"), 
-          braypa + theme(legend.position = "none"), legend1, 
-          nrow = 1, ncol = 3, rel_widths = c(1.5, 1.5, 0.75), align = "h", 
-          axis = "t")
+col1 = plot_grid(braygf + theme(legend.position = "none"), 
+          jaccgf + theme(legend.position = "none"), align = "v", 
+          axis = "t", nrow = 2, ncol = 1, labels = c("A", "C"))
+col2 = plot_grid(braypa + theme(legend.position = "none"),
+                 jaccpa + theme(legend.position = "none"), 
+                 align = "v", axis = "t", nrow = 2, ncol = 1, 
+                 labels = c("B", "D"))
+col3 = plot_grid(legend1)
+plot_grid(col1, col2, col3, nrow = 1, ncol = 3, rel_widths = c(1.5, 1.5, 0.75))
 dev.off()
 ```
+
 PDF plots are included below
 ```{r bray_pdf}
-pdf(file="nmds_plot_combined_shotgun.pdf", width=18, height=7)
+pdf(file="nmds_plot_combined_shotgun_nogf.pdf", width=18, height=7)
 legend1 = get_legend(braygf + theme(legend.box.margin = margin(0, 0, 0, 12)))
 plot_grid(braygf + theme(legend.position = "none"), 
           braypa + theme(legend.position = "none"), legend1, 
@@ -190,6 +234,7 @@ plot_grid(braygf + theme(legend.position = "none"),
           axis = "t")
 dev.off()
 ```
+
 ## Individual pathway differences
 
 We ran a generalized linear model with a negative binomial distribution to assess the influence of treatment and floor on the relative abundance of all pathways detected.
@@ -202,6 +247,15 @@ paths_t = paths[, colSums(paths != 0) > 0] %>% pivot_longer(-Pathway) %>%
 metadata = read_tsv("chioma_Sept20_metadata_function.txt", col_types = "cccfffddfffcf")
 
 paths_meta = inner_join(metadata, paths_t, by = "name") %>% filter(Treatment == "Saline" | Treatment == "Bleomycin") 
+
+genes = read_tsv("chioma_genefamilies_cog_cpm_unstratified.tsv")
+genes_t = genes[, colSums(genes != 0) > 0] %>% pivot_longer(-GeneFamily) %>% 
+  pivot_wider(names_from=GeneFamily, values_from=value)
+
+metadata = read_tsv("chioma_Sept20_metadata_function.txt", col_types = "cccfffddfffcf")
+
+genes_meta = inner_join(metadata, genes_t, by = "name") %>% filter(Treatment == "Saline" | Treatment == "Bleomycin") %>% 
+  filter(Floor != "Germ-free")
 
 
 paths_meta = as.data.frame(paths_meta)
@@ -261,6 +315,72 @@ write.csv(treatment_corrected, "treatment_corrected_pathways.csv")
 
 ```
 
+## Alpha diversity
+```{r alpha}
+shannond = diversity(paths_meta[,14:314], index = "shannon")
+
+shannone = shannond/log(specnumber(paths_meta[,14:314]))
+
+diversity = cbind(paths_meta[,1:14], shannond, shannone)
+
+diversity$Floor = factor(diversity$Floor,
+                                     levels = c("ABSL1", "ABSL2",
+                                                "Germ-free"))
+
+div = wilcox.test(shannond ~ Floor, 
+                        data = diversity)
+div
+
+divt = wilcox.test(shannond ~ Treatment, 
+                        data = diversity)
+divt
+
+div_lm = lm(shannond ~ Floor*Treatment, 
+            data = diversity_nogerm)
+Anova(div_lm)
+
+even = wilcox.test(shannone ~ Floor, 
+                        data = diversity_nogerm)
+even
+
+div_plot = ggboxplot(diversity, x = "Floor", 
+                    y = "shannond", color = "Floor", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Shannon Diversity") 
+div_plot = ggpar(div_plot, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+div_plot
+
+shannond = diversity(genes_meta[,14:12144], index = "shannon")
+
+shannone = shannond/log(specnumber(genes_meta[,14:12144]))
+
+diversity = cbind(genes_meta[,1:14], shannond, shannone)
+
+diversity$Floor = factor(diversity$Floor,
+                                     levels = c("ABSL1", "ABSL2",
+                                                "Germ-free"))
+
+div = wilcox.test(shannond ~ Floor, 
+                        data = diversity)
+div
+
+divt = wilcox.test(shannond ~ Treatment, 
+                        data = diversity)
+divt
+
+div_lm = lm(shannond ~ Floor*Treatment, 
+            data = diversity_nogerm)
+Anova(div_lm)
+
+even = wilcox.test(shannone ~ Floor, 
+                        data = diversity_nogerm)
+even
+```
+
 ## Pathway heat map
 
 ```{r heatmap}
@@ -278,8 +398,7 @@ paths_subset = paths_meta %>%
 paths_norm = t(apply(paths_subset, 1, cal_z_score))
 my_sample_col = data.frame(Floor = paths_meta$Floor, Treatment = paths_meta$Treatment)
 row.names(my_sample_col) <- colnames(paths_subset)
-my_color = list(Floor = c(ABSL2 = "#e41a1c", ABSL1 = "#377eb8", `Germ-free`
-                          = "#4daf4a"), 
+my_color = list(Floor = c(ABSL1 = "#e41a1c", ABSL2 = "#377eb8"), 
                 Treatment = c(Bleomycin = "black", Saline = "grey"))
 heatmap = pheatmap(paths_norm, show_colnames = F, cluster_rows = F,
          annotation_col = my_sample_col, show_rownames = F,
