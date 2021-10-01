@@ -153,7 +153,9 @@ braypa <- ggplot(mds_bray_pa_points2, aes(x = MDS1, y = MDS2,
         plot.title = element_text(size=rel(3)),
         legend.title = element_text(size=rel(2)),
         legend.text = element_text(size = rel(1.8))) + 
-  ggtitle("Pathway abundance")
+  ggtitle("Pathway abundance")+
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Treatment, 
+                   linetype = Treatment))
 braypa
 
 mds_bray_gf<-metaMDS(bray_gf, k=2, trymax=499)
@@ -171,7 +173,9 @@ braygf <- ggplot(mds_bray_gf_points2, aes(x = MDS1, y = MDS2,
         plot.title = element_text(size=rel(3)),
         legend.title = element_text(size=rel(2)),
         legend.text = element_text(size = rel(1.8))) + 
-  ggtitle("Gene families")
+  ggtitle("Gene families") +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Treatment, 
+                   linetype = Treatment))
 braygf
 
 mds_jacc_pa<-metaMDS(jaccard_pa, k=2, trymax=499)
@@ -188,7 +192,9 @@ jaccpa <- ggplot(mds_jacc_pa_points2, aes(x = MDS1, y = MDS2,
         axis.title.y=element_text(size=rel(2)),
         plot.title = element_text(size=rel(3)),
         legend.title = element_text(size=rel(2)),
-        legend.text = element_text(size = rel(1.8)))
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Treatment, 
+                   linetype = Treatment))
 jaccpa
 
 mds_jacc_gf<-metaMDS(jaccard_gf, k=2, trymax=499)
@@ -205,7 +211,9 @@ jaccgf <- ggplot(mds_jacc_gf_points2, aes(x = MDS1, y = MDS2,
         axis.title.y=element_text(size=rel(2)),
         plot.title = element_text(size=rel(3)),
         legend.title = element_text(size=rel(2)),
-        legend.text = element_text(size = rel(1.8))) 
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Treatment, 
+                   linetype = Treatment))
 jaccgf
 ```
 

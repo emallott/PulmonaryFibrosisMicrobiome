@@ -47,6 +47,10 @@ species_t = species[, colSums(species != 0) > 0] %>% pivot_longer(-body_site) %>
   pivot_wider(names_from=body_site, values_from=value)
 species_meta = inner_join(metadata, species_t) %>% filter(Treatment == "Saline" | Treatment == "Bleomycin") %>% 
   filter(Floor != "Germ-free")
+species_meta_absl1 = species_meta %>% 
+  filter(Floor == "ABSL1")
+species_meta_absl2 = species_meta %>% 
+  filter(Floor == "ABSL2")
 ```
 
 ## Calculating distance matrices
@@ -55,7 +59,14 @@ Bray-Curtis and Jaccard distance matrices are calculated in vegan.
 
 ```{r distances}
 bray = vegdist(species_meta[,14:55], method = "bray")
-jaccard = vegdist(species_meta[14:55], method = "jaccard")
+jaccard = vegdist(species_meta[14:55], method = "jaccard", 
+                  binary = T)
+bray_absl1 = vegdist(species_meta_absl1[,14:55], method = "bray")
+jaccard_absl1 = vegdist(species_meta_absl1[14:55], method = "jaccard", 
+                  binary = T)
+bray_absl2 = vegdist(species_meta_absl2[,14:55], method = "bray")
+jaccard_absl2 = vegdist(species_meta_absl2[14:55], method = "jaccard", 
+                  binary = T)
 ```
 
 ## PERMANOVAs
@@ -67,12 +78,24 @@ We will first look at composition taking species abundance into account (Bray-Cu
 ```{r permanova_bray}
 adonis2(bray ~ Floor + Treatment, data=species_meta, 
         by = "margin", permutations = 4999)
+
+adonis2(bray_absl1 ~ Treatment, data=species_meta_absl1, 
+        by = "margin", permutations = 4999)
+
+adonis2(bray_absl2 ~ Treatment, data=species_meta_absl2, 
+        by = "margin", permutations = 4999)
 ```
 
 And then at presence-absence (Jaccard metric).
 
 ```{r permanova_jaccard}
 adonis2(jaccard ~ Floor + Treatment, data=species_meta, 
+        by = "margin", permutations = 4999)
+
+adonis2(jaccard_absl1 ~ Treatment, data=species_meta_absl1, 
+        by = "margin", permutations = 4999)
+
+adonis2(jaccard_absl2 ~ Treatment, data=species_meta_absl2, 
         by = "margin", permutations = 4999)
 ```
 
@@ -117,7 +140,9 @@ bray_plot <- ggplot(mds_otus_bray_points2,
         axis.title.y=element_text(size=rel(2)),
         plot.title = element_text(size=rel(3)),
         legend.title = element_text(size=rel(2)),
-        legend.text = element_text(size = rel(1.8)))
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Treatment, 
+                   linetype = Treatment))
 bray_plot
 dev.off()
 bray_plot
@@ -125,7 +150,46 @@ bray_plot
 PDF plots are included below
 ```{r bray_pdf}
 pdf(file="nmds_plot_bray.pdf", width=8, height=6)
-bray
+bray_plot
+dev.off()
+```
+
+We constructed a non-linear multidimensional scaling plot for the Jaccard metric.
+
+```{r nmds_jaccard}
+mds_otus_jaccard<-metaMDS(jaccard, k=2, trymax=499)
+mds_otus_jaccard_points<-mds_otus_jaccard$points
+mds_otus_jaccard_points2<-merge(x=mds_otus_jaccard_points, 
+                             y = species_meta, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mds_otus_jaccard_points2$Floor = factor(mds_otus_jaccard_points2$Floor,
+                                     levels = c("ABSL1", "ABSL2",
+                                                "Germ-free"))
+
+tiff(file="nmds_plot_jaccard.tif", res=300, width=8, height=6, units="in")
+jaccard_plot <- ggplot(mds_otus_jaccard_points2, 
+                    aes(x = MDS1, y = MDS2, color = Floor, 
+                        shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set1') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Treatment, 
+                   linetype = Treatment))
+jaccard_plot
+dev.off()
+jaccard_plot
+```
+PDF plots are included below
+```{r bray_pdf}
+pdf(file="nmds_plot_jaccard.pdf", width=8, height=6)
+jaccard_plot
 dev.off()
 ```
 
@@ -135,11 +199,12 @@ shannond = diversity(species_meta[,14:55], index = "shannon")
 
 shannone = shannond/log(specnumber(species_meta[,14:55]))
 
-diversity = cbind(species_meta[,1:14], shannond, shannone)
+speciesr = specnumber(species_meta[,14:55])
+
+diversity = cbind(species_meta[,1:14], shannond, shannone, speciesr)
 
 diversity$Floor = factor(diversity$Floor,
-                                     levels = c("ABSL1", "ABSL2",
-                                                "Germ-free"))
+                                     levels = c("ABSL1", "ABSL2"))
 
 div = kruskal.test(shannond ~ Floor, 
                         data = diversity)
@@ -159,18 +224,44 @@ div = wilcox.test(shannond ~ Floor,
                         data = diversity_nogerm)
 div
 
-divt = wilcox.test(shannond ~ Treatment, 
-                        data = diversity_nogerm)
-divt
-
-div_lm = lm(shannond ~ Floor*Treatment, 
-            data = diversity_nogerm)
-Anova(div_lm)
-
 even = wilcox.test(shannone ~ Floor, 
                         data = diversity_nogerm)
 even
 
+rich = wilcox.test(speciesr ~ Floor, data = diversity_nogerm)
+rich
+
+diversity_nogerm_absl1 = diversity %>% filter(Floor != "Germ-free") %>% 
+  filter(Floor == "ABSL1")
+
+divt = wilcox.test(shannond ~ Treatment, 
+                        data = diversity_nogerm_absl1)
+divt
+
+event = wilcox.test(shannone ~ Treatment, 
+                        data = diversity_nogerm_absl1)
+event
+
+richt = wilcox.test(speciesr ~ Treatment, data = diversity_nogerm_absl1)
+richt
+
+diversity_nogerm_absl2 = diversity %>% filter(Floor != "Germ-free") %>% 
+  filter(Floor == "ABSL2")
+
+divt = wilcox.test(shannond ~ Treatment, 
+                        data = diversity_nogerm_absl2)
+divt
+
+event = wilcox.test(shannone ~ Treatment, 
+                        data = diversity_nogerm_absl2)
+event
+
+richt = wilcox.test(speciesr ~ Treatment, data = diversity_nogerm_absl2)
+richt
+```
+
+### Alpha diversity graphs
+```{r alpha_graphs}
 div_plot = ggboxplot(diversity_nogerm, x = "Floor", 
                     y = "shannond", color = "Floor", 
                     palette = "Set1", add = "jitter", 
@@ -186,15 +277,101 @@ even_plot = ggboxplot(diversity_nogerm, x = "Floor",
                     y = "shannone", color = "Floor", 
                     palette = "Set1", add = "jitter", 
                     add.params = list(fill = "white"), 
-                 ylab = "Shannon Evenness") 
+                 ylab = "Pielou's Evenness") 
 even_plot = ggpar(even_plot, legend = "right") + 
   rremove("xlab") + rremove("x.text") + 
   rremove("legend.title") + 
   stat_compare_means(method = "wilcox.test")
 even_plot
 
-tiff(file="Floor_diversity.tif", res=300, width=4, height=3, units="in")
-div_plot
+rich_plot = ggboxplot(diversity_nogerm, x = "Floor", 
+                    y = "speciesr", color = "Floor", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Species richness") 
+rich_plot = ggpar(rich_plot, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+rich_plot
+
+tiff(file="Floor_diversity.tif", res=300, width=12, height=3, units="in")
+ggarrange(div_plot, even_plot, rich_plot, nrow = 1, ncol = 3, 
+          common.legend = T, align = "h", legend = "right")
+dev.off()
+
+div_plot_t1 = ggboxplot(diversity_nogerm_absl1, x = "Treatment", 
+                    y = "shannond", color = "Treatment", 
+                    palette = c("light gray", "dark gray"), add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Shannon Diversity") 
+div_plot_t1 = ggpar(div_plot_t1, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+div_plot_t1
+
+even_plot_t1 = ggboxplot(diversity_nogerm_absl1, x = "Treatment", 
+                    y = "shannone", color = "Treatment", 
+                    palette = c("light gray", "dark gray"), add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Pielou's Evenness") 
+even_plot_t1 = ggpar(even_plot_t1, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+even_plot_t
+
+rich_plot_t1 = ggboxplot(diversity_nogerm_absl1, x = "Treatment", 
+                    y = "speciesr", color = "Treatment", 
+                    palette = c("light gray", "dark gray"), add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Species richness") 
+rich_plot_t1 = ggpar(rich_plot_t1, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+rich_plot_t1
+
+div_plot_t2 = ggboxplot(diversity_nogerm_absl2, x = "Treatment", 
+                    y = "shannond", color = "Treatment", 
+                    palette = c("light gray", "dark gray"), add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Shannon Diversity") 
+div_plot_t2 = ggpar(div_plot_t2, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+div_plot_t2
+
+even_plot_t2 = ggboxplot(diversity_nogerm_absl2, x = "Treatment", 
+                    y = "shannone", color = "Treatment", 
+                    palette = c("light gray", "dark gray"), add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Pielou's Evenness") 
+even_plot_t2 = ggpar(even_plot_t2, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+even_plot_t
+
+rich_plot_t2 = ggboxplot(diversity_nogerm_absl2, x = "Treatment", 
+                    y = "speciesr", color = "Treatment", 
+                    palette = c("light gray", "dark gray"), add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Species richness") 
+rich_plot_t2 = ggpar(rich_plot_t2, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+rich_plot_t2
+
+tiff(file="Treatment_diversity.tif", res=300, width=12, height=6, units="in")
+ggarrange(div_plot_t1, even_plot_t1, rich_plot_t1, 
+          div_plot_t2, even_plot_t2, rich_plot_t2, 
+          nrow = 2, ncol = 3, 
+          common.legend = T, align = "h", legend = "right", 
+          labels = c("A", "B", "C", "D", "E", "F"))
 dev.off()
 ```
 
