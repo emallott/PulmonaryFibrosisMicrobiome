@@ -1,0 +1,1198 @@
+---
+title: "Taxonomic Analysis"
+author: "Liz Mallott"
+date: "9/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Loading required libraries
+
+The following libraries are required for this analysis:
+tidyverse (v.1.3.0)
+vegan (v.2.5-6)
+pairwiseAdonis (v.0.3, https://github.com/pmartinezarbizu/pairwiseAdonis)
+cowplot (v.1.1.0)
+glmmTMB (v.1.0.2.1)
+multcomp (v.1.4-14)
+car (v.3.0-9)
+fdrtool (v.1.2.15)
+
+```{r load_libraries}
+library(tidyverse)
+library(vegan)
+library(pairwiseAdonis)
+library(cowplot)
+library(glmmTMB)
+library(multcomp)
+library(car)
+library(fdrtool)
+library(ggpubr)
+library(vroom)
+```
+
+## Importing data
+
+The species-level merged relative abundance table from MetaPhlan and metadata files are loaded. All germ-free and all control samples are removed and the relative abundance table is transposed for ease of use in vegan.
+
+```{r import_data_fecal}
+species = read_tsv("merged_abundance_table_all_species.txt")
+phyla = read_tsv("merged_abundance_table_all_phyla.txt")
+phyla_t = phyla[, colSums(phyla != 0) > 0] %>% pivot_longer(-body_site) %>% 
+  pivot_wider(names_from=body_site, values_from=value)
+metadata = read_tsv("metadata_combined.txt", col_types = "cccfffffddffff")
+species_t = species[, colSums(species != 0) > 0] %>% pivot_longer(-body_site) %>% 
+  pivot_wider(names_from=body_site, values_from=value)
+species_meta = inner_join(metadata, species_t) %>% filter(Stool_origin == "ABSL1" | Stool_origin == "ABSL2") %>% 
+  filter(Treatment != "CONTROL")
+```
+
+Taxonomic data for lung samples was obtained from Kaiju and imported. An OTU-like table was constructed. Taxa with <3 reads were filtered out prior to downstream analysis. Sample 35 was removed as it appears to be an outlier.
+
+```{r import_data_lung}
+files = fs::dir_ls(path = "kaiju_out", glob = "*summary.tsv")
+
+kaiju = vroom(files)
+
+lung_species = kaiju %>%
+  dplyr::select(file, reads, taxon_name) %>% 
+  pivot_wider(names_from = "taxon_name", values_from = "reads") %>%
+  replace(is.na(.),0) 
+
+lung_species_filtered = lung_species %>%  
+  mutate(Sample = basename(file)) %>% 
+  mutate(SampleID = str_split(Sample, "_") %>% map_chr(.,1))
+
+#join to metadata, remove low abundance taxa (<3 reads), remove Eukaryotes, viruses, unassigned and unclassified reads
+lung_species_filtered2 = lung_species_filtered %>%
+  dplyr::select(file, SampleID, where(~ is.numeric(.x) && sum(.x) > 2)) %>% 
+  dplyr::select(-starts_with("Eukaryota"), -unclassified, -Viruses,
+                -`cannot be assigned to a (non-viral) species`)
+  
+lung_species_filtered_meta = inner_join(metadata, lung_species_filtered2) 
+
+#write to CSV
+write_csv(lung_species_filtered_meta, "lung_kaiju_species_otutable.csv")
+
+lung_species_filtered_meta2 = read_csv("lung_kaiju_species_otutable2.csv")
+lung_species_filtered_meta_floors = lung_species_filtered_meta %>% 
+  filter(Floor == "ABSL1" | Floor == "ABSL2") %>% 
+  filter(`Sample Description` == "Lung") %>% 
+  filter(SampleID != "6739-OC-35") %>%
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+lung_species_filtered_meta_floors_relab = decostand(lung_species_filtered_meta_floors[,16:595], method = "total")
+
+lung_fecal_species_filtered_meta_floors = lung_species_filtered_meta %>% 
+  filter(Floor == "ABSL1" | Floor == "ABSL2") %>% 
+  filter(SampleID != "6739-OC-35") %>%
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+lung_fecal_species_filtered_meta_floors_relab = decostand(lung_fecal_species_filtered_meta_floors[,16:24929], method = "total")
+
+gflung_fecal_species_filtered_meta_floors = lung_species_filtered_meta %>% 
+  filter(Floor == "ABSL1" | 
+           Floor == "ABSL2" | 
+           Floor == "Germ-free") %>% 
+  filter(Stool_origin == "ABSL1" | 
+           Stool_origin == "ABSL2") %>% 
+  filter(SampleID != "6739-OC-35") %>%
+  slice_tail(n=54) %>% 
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+gflung_fecal_species_filtered_meta_floors_relab = decostand(gflung_fecal_species_filtered_meta_floors[,16:25013], method = "total")
+
+phyla_lung = read_csv("lung_kaiju_phyla_otutable2_relab.csv")
+phyla_lung_floor = read_csv("lung_kaiju_phyla_otutable2_relab_floor.csv") %>% 
+  dplyr::select(SampleID, Actinobacteria:Other) %>% 
+  pivot_longer(-1, names_to = "Phyla", values_to = "Relative abundance")
+```
+
+## Calculating distance matrices
+
+Bray-Curtis and Jaccard distance matrices are calculated in vegan.
+
+```{r distances}
+bray_fecal = vegdist(species_meta[,15:64], method = "bray")
+jaccard_fecal = vegdist(species_meta[15:64], method = "jaccard", 
+                  binary = T)
+write_csv(data.frame(as.matrix(bray_fecal)), "bray_stool_samples.csv")
+write_csv(data.frame(as.matrix(jaccard_fecal)), "jaccard_stool_samples.csv")
+
+bray_lung_floors = vegdist(lung_species_filtered_meta_floors_relab, 
+                    method = "bray")
+jaccard_lung_floors = vegdist(lung_species_filtered_meta_floors_relab, 
+                       method = "jaccard", binary = T)
+
+bray_lung_fecal_floors = vegdist(lung_fecal_species_filtered_meta_floors_relab, 
+                    method = "bray")
+jaccard_lung_fecal_floors = vegdist(lung_fecal_species_filtered_meta_floors_relab, 
+                       method = "jaccard", binary = T)
+
+bray_gflung_fecal_floors = vegdist(gflung_fecal_species_filtered_meta_floors_relab, 
+                    method = "bray")
+jaccard_gflung_fecal_floors = vegdist(gflung_fecal_species_filtered_meta_floors_relab, 
+                       method = "jaccard", binary = T)
+```
+
+## PERMANOVAs
+
+### GF stool vs. originating stool
+
+A PERMANOVA is performed to assess if stool origin (from a mouse from an ABSL1 or ABSL2 floor) or current housing (Germ-free vs. ABSL1 vs. ABSL2) has a larger effect. 
+
+We will first look at composition taking species abundance into account (Bray-Curtis metric).
+
+```{r permanova_bray}
+adonis2(bray_fecal ~ Stool_origin + Floor, data=species_meta, 
+        by = "margin", permutations = 4999)
+```
+
+And then at presence-absence (Jaccard metric).
+
+```{r permanova_jaccard}
+adonis2(jaccard_fecal ~ Stool_origin + Floor, data=species_meta, 
+        by = "margin", permutations = 4999)
+```
+
+### Lung between floor
+
+A PERMANOVA is performed to assess if the lung microbiome is distinct between ABSL1 and ABSL2 mice.
+
+```{r permanova_lungs}
+adonis2(bray_lung_floors ~ Floor + Treatment, data=lung_species_filtered_meta_floors, 
+        by = "margin", permutations = 4999)
+
+adonis2(jaccard_lung_floors ~ Floor + Treatment, data=lung_species_filtered_meta_floors, 
+        by = "margin", permutations = 4999)
+```
+
+
+###Lung vs. feces on same floor
+
+A PERMANOVA is performed to assess the effects of lung vs. stool, housing, and treatment.
+
+```{r permanova_lungs_fecal}
+adonis2(bray_lung_fecal_floors ~ Floor + `Sample Description` + Treatment, data=lung_fecal_species_filtered_meta_floors, 
+        by = "margin", permutations = 4999)
+
+adonis2(jaccard_lung_fecal_floors ~ Floor + `Sample Description` + Treatment, data=lung_fecal_species_filtered_meta_floors, 
+        by = "margin", permutations = 4999)
+```
+
+### GF lung vs originating stool
+
+```{r permanova_gflungs_fecal}
+adonis2(bray_gflung_fecal_floors ~ Stool_origin + `Sample Description` + Treatment, data=gflung_fecal_species_filtered_meta_floors, 
+        by = "margin", permutations = 4999)
+
+adonis2(jaccard_gflung_fecal_floors ~ Stool_origin + `Sample Description` + Treatment, data=gflung_fecal_species_filtered_meta_floors, 
+        by = "margin", permutations = 4999)
+```
+
+## Average distance
+
+We then reshaped the distance matrices so we can compare distances between ABSL1 and ABSL1-gavaged miced, ABSL2 and ABSL2-gavaged mice, ABSL1 and ABSL2 mice, and ABLS1-gavaged and ABSL2-gavaged mice.
+
+### Fecal-fecal comparison
+```{r reshape_fecal_distance}
+bray_df = data.frame(as.matrix(bray_fecal))
+rownames(bray_df) = species_meta$SampleID
+colnames(bray_df) = species_meta$SampleID
+bray_df_si = bray_df %>% rownames_to_column(var = "SampleID")
+bray_df_long = bray_df_si %>% 
+  pivot_longer(-1, names_to = "SampleID2", 
+               values_to = "bray_distance") %>% 
+  filter(bray_distance > 0) %>% 
+  inner_join(metadata, by = c("SampleID" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, bray_distance, Floor, Stool_origin) %>%
+  rename(Floor1 = Floor) %>% rename(Stool_origin1 = Stool_origin) %>% 
+    inner_join(metadata, by = c("SampleID2" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, bray_distance, Floor1, 
+                Stool_origin1, Floor, Stool_origin) %>%
+  rename(Floor2 = Floor) %>% rename(Stool_origin2 = Stool_origin)
+
+bray_df_long_recode = bray_df_long %>% 
+  mutate(Floors = paste(Floor1, Floor2, sep = "-")) %>% 
+  mutate(Stool_origins = paste(Stool_origin1, Stool_origin2, sep = "-")) %>%
+  mutate(combo = case_when(Floors == "Germ-free-ABSL1" &
+              Stool_origins == "ABSL1-ABSL1" ~ 
+              "GF-ABSL1-Exp-ABSL1",
+            Floors == "Germ-free-ABSL2" & 
+              Stool_origins == "ABSL2-ABSL2" ~
+              "GF-ABSL2-Exp-ABSL2",
+            Floors == "ABSL1-ABSL2" &
+              Stool_origins == "ABSL1-ABSL2" ~
+              "Exp-ABSL1-Exp-ABSL2",
+            Floors == "Germ-free-Germ-free" & 
+              Stool_origins == "ABSL1-ABSL2" ~
+              "GF-ABSL1-GF-ABSL2",
+            Floors == "Germ-free-ABSL1" & 
+              Stool_origins == "ABSL2-ABSL1" ~
+              "GF-ABSL2-Exp-ABSL1",
+            Floors == "Germ-free-ABSL2" & 
+              Stool_origins == "ABSL1-ABSL2" ~
+              "GF-ABSL1-Exp-ABSL2")) %>% 
+  filter(combo != is.na(.))
+
+jaccard_df = data.frame(as.matrix(jaccard_fecal))
+rownames(jaccard_df) = species_meta$SampleID
+colnames(jaccard_df) = species_meta$SampleID
+jaccard_df_si = jaccard_df %>% rownames_to_column(var = "SampleID")
+jaccard_df_long = jaccard_df_si %>% 
+  pivot_longer(-1, names_to = "SampleID2", 
+               values_to = "jaccard_distance") %>% 
+  filter(jaccard_distance > 0) %>% 
+  inner_join(metadata, by = c("SampleID" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, jaccard_distance, Floor, Stool_origin) %>%
+  rename(Floor1 = Floor) %>% rename(Stool_origin1 = Stool_origin) %>% 
+    inner_join(metadata, by = c("SampleID2" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, jaccard_distance, Floor1, 
+                Stool_origin1, Floor, Stool_origin) %>%
+  rename(Floor2 = Floor) %>% rename(Stool_origin2 = Stool_origin)
+
+jaccard_df_long_recode = jaccard_df_long %>% 
+  mutate(Floors = paste(Floor1, Floor2, sep = "-")) %>% 
+  mutate(Stool_origins = paste(Stool_origin1, Stool_origin2, sep = "-")) %>%
+  mutate(combo = case_when(Floors == "Germ-free-ABSL1" &
+              Stool_origins == "ABSL1-ABSL1" ~ 
+              "GF-ABSL1-Exp-ABSL1",
+            Floors == "Germ-free-ABSL2" & 
+              Stool_origins == "ABSL2-ABSL2" ~
+              "GF-ABSL2-Exp-ABSL2",
+            Floors == "ABSL1-ABSL2" &
+              Stool_origins == "ABSL1-ABSL2" ~
+              "Exp-ABSL1-Exp-ABSL2",
+            Floors == "Germ-free-Germ-free" & 
+              Stool_origins == "ABSL1-ABSL2" ~
+              "GF-ABSL1-GF-ABSL2",
+            Floors == "Germ-free-ABSL1" & 
+              Stool_origins == "ABSL2-ABSL1" ~
+              "GF-ABSL2-Exp-ABSL1",
+            Floors == "Germ-free-ABSL2" & 
+              Stool_origins == "ABSL1-ABSL2" ~
+              "GF-ABSL1-Exp-ABSL2")) %>% 
+  filter(combo != is.na(.))
+```
+
+We then use a linear model followed by a Tukey comparison to test if average distances differ significantly between treatments.
+
+```{r fecal_distance_test}
+bray_df_long_recode$combo = as.factor(bray_df_long_recode$combo)
+distance = lm(bray_distance ~ combo, data = bray_df_long_recode)
+summary(distance)
+Anova(distance)
+summary(glht(distance,linfct=mcp(combo="Tukey")))
+
+avg = bray_df_long_recode %>% group_by(combo) %>% 
+  summarize(average = mean(bray_distance), stddv = sd(bray_distance), n = n(), se = stddv/sqrt(n))
+avg
+
+boxplot(bray_distance ~ combo, data = bray_df_long_recode)
+
+jaccard_df_long_recode$combo = as.factor(jaccard_df_long_recode$combo)
+distance = lm(jaccard_distance ~ combo, data = jaccard_df_long_recode)
+summary(distance)
+Anova(distance)
+summary(glht(distance,linfct=mcp(combo="Tukey")))
+
+avg = jaccard_df_long_recode %>% group_by(combo) %>% 
+  summarize(average = mean(jaccard_distance), stddv = sd(jaccard_distance), n = n(), se = stddv/sqrt(n))
+avg
+
+boxplot(jaccard_distance ~ combo, data = jaccard_df_long_recode)
+```
+
+```{r avg_distance_graphs}
+avg_plot_bray = ggboxplot(bray_df_long_recode, x = "combo", 
+                    y = "bray_distance", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Bray-Curtis distance",
+                 x.text.angle = 90) 
+avg_plot_bray = ggpar(avg_plot_bray, legend = "right") + 
+  rremove("xlab") + rremove("x.text") +
+  rremove("legend.title") + 
+  stat_compare_means(label = "p.signif", 
+                     comparisons = list(c("GF-ABSL1-Exp-ABSL1",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-Exp-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL1",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "GF-ABSL1-Exp-ABSL1"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "GF-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL2",
+                                          "GF-ABSL1-GF-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL1",
+                                          "GF-ABSL1-GF-ABSL2")),
+                     symnum.args = list(cutpoints = 
+                                          c(0, 0.001, 0.8, 0.9, 1),
+                                        symbols = c("***",  "**", "*","ns")))
+avg_plot_bray
+
+avg_plot_jaccard = ggboxplot(jaccard_df_long_recode, x = "combo", 
+                    y = "jaccard_distance", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Jaccard distance",
+                 x.text.angle = 90) 
+avg_plot_jaccard = ggpar(avg_plot_jaccard, legend = "right") + 
+  rremove("xlab") + 
+  rremove("legend.title") + 
+  stat_compare_means(label = "p.signif", 
+                     comparisons = list(c("GF-ABSL1-Exp-ABSL1",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-Exp-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL1",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "GF-ABSL1-Exp-ABSL1"),
+                                        c("GF-ABSL2-Exp-ABSL1",
+                                          "GF-ABSL1-Exp-ABSL1"),
+                                        c("GF-ABSL2-Exp-ABSL2",
+                                          "GF-ABSL1-Exp-ABSL1"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "GF-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL1",
+                                          "GF-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL2",
+                                          "GF-ABSL1-Exp-ABSL2")),
+                     symnum.args = list(cutpoints = 
+                                          c(0, 0.001, 0.5, 1),
+                                        symbols = c("***",  "*", "ns")))
+avg_plot_jaccard
+```
+
+```{r avg_distance_plot}
+tiff(file="avg_distance_plots.tif", res=300, width=12, height=10, units="in")
+ggarrange(avg_plot_bray, avg_plot_jaccard, nrow = 2, ncol = 1, 
+          align = "v", heights = c(1.5,2))
+dev.off()
+```
+
+### GF lung-fecal comparison
+
+Average distances were calculated between lung microbiota of germ-free mice gavaged with either ABSL1 or ABSL2 stool and gut microbiota of ABSL1 and ABSL2 mice.
+
+```{r reshape_gflung_fecal_distance}
+bray_gflung_fecal_floors_df = data.frame(as.matrix(bray_gflung_fecal_floors))
+rownames(bray_gflung_fecal_floors_df) = gflung_fecal_species_filtered_meta_floors$SampleID
+colnames(bray_gflung_fecal_floors_df) = gflung_fecal_species_filtered_meta_floors$SampleID
+bray_gflung_fecal_floors_df_si = bray_gflung_fecal_floors_df %>% rownames_to_column(var = "SampleID")
+bray_gflung_fecal_floors_df_long = bray_gflung_fecal_floors_df_si %>% 
+  pivot_longer(-1, names_to = "SampleID2", 
+               values_to = "bray_distance") %>% 
+  filter(bray_distance > 0) %>% 
+  inner_join(metadata, by = c("SampleID" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, bray_distance, Floor, Stool_origin) %>%
+  rename(Floor1 = Floor) %>% rename(Stool_origin1 = Stool_origin) %>% 
+    inner_join(metadata, by = c("SampleID2" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, bray_distance, Floor1, 
+                Stool_origin1, Floor, Stool_origin) %>%
+  rename(Floor2 = Floor) %>% rename(Stool_origin2 = Stool_origin)
+
+bray_gflung_fecal_floors_df_long_recode = bray_gflung_fecal_floors_df_long %>% 
+  mutate(Floors = paste(Floor1, Floor2, sep = "-")) %>% 
+  mutate(Stool_origins = paste(Stool_origin1, Stool_origin2, sep = "-")) %>%
+  mutate(combo = case_when(Floors == "Germ-free-ABSL1" &
+              Stool_origins == "ABSL1-ABSL1" ~ 
+              "GF-ABSL1-Exp-ABSL1",
+            Floors == "Germ-free-ABSL2" & 
+              Stool_origins == "ABSL2-ABSL2" ~
+              "GF-ABSL2-Exp-ABSL2",
+            Floors == "ABSL1-ABSL2" &
+              Stool_origins == "ABSL1-ABSL2" ~
+              "Exp-ABSL1-Exp-ABSL2",
+            Floors == "Germ-free-Germ-free" & 
+              Stool_origins == "ABSL1-ABSL2" ~
+              "GF-ABSL1-GF-ABSL2",
+            Floors == "Germ-free-ABSL1" & 
+              Stool_origins == "ABSL2-ABSL1" ~
+              "GF-ABSL2-Exp-ABSL1",
+            Floors == "Germ-free-ABSL2" & 
+              Stool_origins == "ABSL1-ABSL2" ~
+              "GF-ABSL1-Exp-ABSL2")) %>% 
+  filter(combo != is.na(.))
+
+jaccard_gflung_fecal_floors_df = data.frame(as.matrix(jaccard_gflung_fecal_floors))
+rownames(jaccard_gflung_fecal_floors_df) = gflung_fecal_species_filtered_meta_floors$SampleID
+colnames(jaccard_gflung_fecal_floors_df) = gflung_fecal_species_filtered_meta_floors$SampleID
+jaccard_gflung_fecal_floors_df_si = jaccard_gflung_fecal_floors_df %>% rownames_to_column(var = "SampleID")
+jaccard_gflung_fecal_floors_df_long = jaccard_gflung_fecal_floors_df_si %>% 
+  pivot_longer(-1, names_to = "SampleID2", 
+               values_to = "jaccard_distance") %>% 
+  filter(jaccard_distance > 0) %>% 
+  inner_join(metadata, by = c("SampleID" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, jaccard_distance, Floor, Stool_origin) %>%
+  rename(Floor1 = Floor) %>% rename(Stool_origin1 = Stool_origin) %>% 
+    inner_join(metadata, by = c("SampleID2" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, jaccard_distance, Floor1, 
+                Stool_origin1, Floor, Stool_origin) %>%
+  rename(Floor2 = Floor) %>% rename(Stool_origin2 = Stool_origin)
+
+jaccard_gflung_fecal_floors_df_long_recode = jaccard_gflung_fecal_floors_df_long %>% 
+  mutate(Floors = paste(Floor1, Floor2, sep = "-")) %>% 
+  mutate(Stool_origins = paste(Stool_origin1, Stool_origin2, sep = "-")) %>%
+  mutate(combo = case_when(Floors == "Germ-free-ABSL1" &
+              Stool_origins == "ABSL1-ABSL1" ~ 
+              "GF-ABSL1-Exp-ABSL1",
+            Floors == "Germ-free-ABSL2" & 
+              Stool_origins == "ABSL2-ABSL2" ~
+              "GF-ABSL2-Exp-ABSL2",
+            Floors == "ABSL1-ABSL2" &
+              Stool_origins == "ABSL1-ABSL2" ~
+              "Exp-ABSL1-Exp-ABSL2",
+            Floors == "Germ-free-Germ-free" & 
+              Stool_origins == "ABSL1-ABSL2" ~
+              "GF-ABSL1-GF-ABSL2",
+            Floors == "Germ-free-ABSL1" & 
+              Stool_origins == "ABSL2-ABSL1" ~
+              "GF-ABSL2-Exp-ABSL1",
+            Floors == "Germ-free-ABSL2" & 
+              Stool_origins == "ABSL1-ABSL2" ~
+              "GF-ABSL1-Exp-ABSL2")) %>% 
+  filter(combo != is.na(.))
+```
+
+```{r gflung_fecal_distance_test}
+bray_gflung_fecal_floors_df_long_recode$combo = as.factor(bray_gflung_fecal_floors_df_long_recode$combo)
+distance = lm(bray_distance ~ combo, data = bray_gflung_fecal_floors_df_long_recode)
+summary(distance)
+Anova(distance)
+summary(glht(distance,linfct=mcp(combo="Tukey")))
+
+avg = bray_gflung_fecal_floors_df_long_recode %>% group_by(combo) %>% 
+  summarize(average = mean(bray_distance), stddv = sd(bray_distance), n = n(), se = stddv/sqrt(n))
+avg
+
+boxplot(bray_distance ~ combo, data = bray_gflung_fecal_floors_df_long_recode)
+
+jaccard_gflung_fecal_floors_df_long_recode$combo = as.factor(jaccard_gflung_fecal_floors_df_long_recode$combo)
+distance = lm(jaccard_distance ~ combo, data = jaccard_gflung_fecal_floors_df_long_recode)
+summary(distance)
+Anova(distance)
+summary(glht(distance,linfct=mcp(combo="Tukey")))
+
+avg = jaccard_gflung_fecal_floors_df_long_recode %>% group_by(combo) %>% 
+  summarize(average = mean(jaccard_distance), stddv = sd(jaccard_distance), n = n(), se = stddv/sqrt(n))
+avg
+
+boxplot(jaccard_distance ~ combo, data = jaccard_gflung_fecal_floors_df_long_recode)
+```
+
+```{r avg_distance_graphs}
+avg_plot_bray = ggboxplot(bray_gflung_fecal_floors_df_long_recode, x = "combo", 
+                    y = "bray_distance", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Bray-Curtis distance",
+                 x.text.angle = 90) 
+avg_plot_bray = ggpar(avg_plot_bray, legend = "right") + 
+  rremove("xlab") + rremove("x.text") +
+  rremove("legend.title") + 
+  stat_compare_means(label = "p.signif", 
+                     comparisons = list(c("GF-ABSL1-Exp-ABSL1",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-Exp-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL1",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "GF-ABSL1-Exp-ABSL1"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "GF-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL1",
+                                          "GF-ABSL1-GF-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL2",
+                                          "GF-ABSL1-GF-ABSL2")),
+                     symnum.args = list(cutpoints = 
+                                          c(0, 0.001, 0.8, 0.9, 1),
+                                        symbols = c("***",  "**", "*","ns")))
+avg_plot_bray
+
+avg_plot_jaccard = ggboxplot(jaccard_gflung_fecal_floors_df_long_recode, x = "combo", 
+                    y = "jaccard_distance", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Jaccard distance",
+                 x.text.angle = 90) 
+avg_plot_jaccard = ggpar(avg_plot_jaccard, legend = "right") + 
+  rremove("xlab") + 
+  rremove("legend.title") + 
+  stat_compare_means(label = "p.signif", 
+                     comparisons = list(c("GF-ABSL1-Exp-ABSL1",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-Exp-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL1-GF-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL1",
+                                          "Exp-ABSL1-Exp-ABSL2"),
+                                        c("GF-ABSL2-Exp-ABSL2",
+                                          "Exp-ABSL1-Exp-ABSL2")),
+                     symnum.args = list(cutpoints = 
+                                          c(0, 0.001, 0.5, 1),
+                                        symbols = c("***",  "*", "ns")))
+avg_plot_jaccard
+```
+
+```{r avg_distance_plot}
+tiff(file="avg_distance_plots_gflung_fecal.tif", res=300, width=12, height=10, units="in")
+ggarrange(avg_plot_bray, avg_plot_jaccard, nrow = 2, ncol = 1, 
+          align = "v", heights = c(1.5,2))
+dev.off()
+```
+
+### Lung-fecal comparison
+
+Average distances were calculated between lung microbiota of ABSL1 and ABSL2 mice and gut microbiota of ABSL1 and ABSL2 mice.
+
+```{r reshape_lung_fecal_distance}
+bray_lung_fecal_floors_df = data.frame(as.matrix(bray_lung_fecal_floors))
+rownames(bray_lung_fecal_floors_df) = lung_fecal_species_filtered_meta_floors$SampleID
+colnames(bray_lung_fecal_floors_df) = lung_fecal_species_filtered_meta_floors$SampleID
+bray_lung_fecal_floors_df_si = bray_lung_fecal_floors_df %>% rownames_to_column(var = "SampleID")
+bray_lung_fecal_floors_df_long = bray_lung_fecal_floors_df_si %>% 
+  pivot_longer(-1, names_to = "SampleID2", 
+               values_to = "bray_distance") %>% 
+  filter(bray_distance > 0) %>% 
+  inner_join(metadata, by = c("SampleID" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, bray_distance, Floor, `Sample Description`) %>%
+  rename(Floor1 = Floor) %>% rename(Sample_Description1 = `Sample Description`) %>% 
+    inner_join(metadata, by = c("SampleID2" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, bray_distance, Floor1, 
+                Sample_Description1, Floor, 
+                `Sample Description`) %>%
+  rename(Floor2 = Floor) %>% rename(Sample_Description2 = `Sample Description`)
+
+bray_lung_fecal_floors_df_long_recode = bray_lung_fecal_floors_df_long %>% 
+  mutate(Floors = paste(Floor1, Floor2, sep = "-")) %>% 
+  mutate(Sample_Descriptions = paste(Sample_Description1, Sample_Description2, sep = "-")) %>%
+  mutate(combo = case_when(Floors == "ABSL1-ABSL1" &
+              Sample_Descriptions == "Lung-Stool" ~ 
+              "L-ABSL1-S-ABSL1",
+            Floors == "ABSL1-ABSL2" & 
+              Sample_Descriptions == "Lung-Stool" ~
+              "L-ABSL1-S-ABSL2",
+            Floors == "ABSL2-ABSL2" &
+              Sample_Descriptions == "Lung-Stool" ~
+              "L-ABSL2-S-ABSL2",
+            Floors == "ABSL1-ABSL2" & 
+              Sample_Descriptions == "Lung-Lung" ~
+              "L-ABSL1-L-ABSL2",
+            Floors == "ABSL1-ABSL2" & 
+              Sample_Descriptions == "Stool-Stool" ~
+              "S-ABSL1-S-ABSL2",
+            Floors == "ABSL2-ABSL1" & 
+              Sample_Descriptions == "Lung-Stool" ~
+              "L-ABSL2-S-ABSL1")) %>% 
+  filter(combo != is.na(.))
+
+jaccard_lung_fecal_floors_df = data.frame(as.matrix(jaccard_lung_fecal_floors))
+rownames(jaccard_lung_fecal_floors_df) = lung_fecal_species_filtered_meta_floors$SampleID
+colnames(jaccard_lung_fecal_floors_df) = lung_fecal_species_filtered_meta_floors$SampleID
+jaccard_lung_fecal_floors_df_si = jaccard_lung_fecal_floors_df %>% rownames_to_column(var = "SampleID")
+jaccard_lung_fecal_floors_df_long = jaccard_lung_fecal_floors_df_si %>% 
+  pivot_longer(-1, names_to = "SampleID2", 
+               values_to = "jaccard_distance") %>% 
+  filter(jaccard_distance > 0) %>% 
+  inner_join(metadata, by = c("SampleID" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, jaccard_distance, Floor, `Sample Description`) %>%
+  rename(Floor1 = Floor) %>% rename(Sample_Description1 = `Sample Description`) %>% 
+    inner_join(metadata, by = c("SampleID2" = "SampleID")) %>% 
+  dplyr::select(SampleID, SampleID2, jaccard_distance, Floor1, 
+                Sample_Description1, Floor, 
+                `Sample Description`) %>%
+  rename(Floor2 = Floor) %>% rename(Sample_Description2 = `Sample Description`)
+
+jaccard_lung_fecal_floors_df_long_recode = jaccard_lung_fecal_floors_df_long %>% 
+  mutate(Floors = paste(Floor1, Floor2, sep = "-")) %>% 
+  mutate(Sample_Descriptions = paste(Sample_Description1, Sample_Description2, sep = "-")) %>%
+  mutate(combo = case_when(Floors == "ABSL1-ABSL1" &
+              Sample_Descriptions == "Lung-Stool" ~ 
+              "L-ABSL1-S-ABSL1",
+            Floors == "ABSL1-ABSL2" & 
+              Sample_Descriptions == "Lung-Stool" ~
+              "L-ABSL1-S-ABSL2",
+            Floors == "ABSL2-ABSL2" &
+              Sample_Descriptions == "Lung-Stool" ~
+              "L-ABSL2-S-ABSL2",
+            Floors == "ABSL1-ABSL2" & 
+              Sample_Descriptions == "Lung-Lung" ~
+              "L-ABSL1-L-ABSL2",
+            Floors == "ABSL1-ABSL2" & 
+              Sample_Descriptions == "Stool-Stool" ~
+              "S-ABSL1-S-ABSL2",
+            Floors == "ABSL2-ABSL1" & 
+              Sample_Descriptions == "Lung-Stool" ~
+              "L-ABSL2-S-ABSL1")) %>% 
+  filter(combo != is.na(.))
+```
+
+```{r lung_fecal_distance_test}
+bray_lung_fecal_floors_df_long_recode$combo = as.factor(bray_lung_fecal_floors_df_long_recode$combo)
+distance = lm(bray_distance ~ combo, data = bray_lung_fecal_floors_df_long_recode)
+summary(distance)
+Anova(distance)
+summary(glht(distance,linfct=mcp(combo="Tukey")))
+
+avg = bray_lung_fecal_floors_df_long_recode %>% group_by(combo) %>% 
+  summarize(average = mean(bray_distance), stddv = sd(bray_distance), n = n(), se = stddv/sqrt(n))
+avg
+
+boxplot(bray_distance ~ combo, data = bray_lung_fecal_floors_df_long_recode)
+
+jaccard_lung_fecal_floors_df_long_recode$combo = as.factor(jaccard_lung_fecal_floors_df_long_recode$combo)
+distance = lm(jaccard_distance ~ combo, data = jaccard_lung_fecal_floors_df_long_recode)
+summary(distance)
+Anova(distance)
+summary(glht(distance,linfct=mcp(combo="Tukey")))
+
+avg = jaccard_lung_fecal_floors_df_long_recode %>% group_by(combo) %>% 
+  summarize(average = mean(jaccard_distance), stddv = sd(jaccard_distance), n = n(), se = stddv/sqrt(n))
+avg
+
+boxplot(jaccard_distance ~ combo, data = jaccard_lung_fecal_floors_df_long_recode)
+```
+
+```{r avg_distance_graphs}
+avg_plot_bray = ggboxplot(bray_lung_fecal_floors_df_long_recode, x = "combo", 
+                    y = "bray_distance", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Bray-Curtis distance",
+                 x.text.angle = 90) 
+avg_plot_bray = ggpar(avg_plot_bray, legend = "right") + 
+  rremove("xlab") + rremove("x.text") +
+  rremove("legend.title") + 
+  stat_compare_means(label = "p.signif", 
+                     comparisons = list(c("L-ABSL1-S-ABSL1",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("L-ABSL1-S-ABSL2",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("L-ABSL2-S-ABSL1",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("L-ABSL2-S-ABSL2",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("L-ABSL1-S-ABSL2",
+                                          "L-ABSL1-S-ABSL1"),
+                                        c("L-ABSL2-S-ABSL2",
+                                          "L-ABSL1-S-ABSL1"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL1-S-ABSL1"),
+                                        c("L-ABSL2-S-ABSL1",
+                                          "L-ABSL1-S-ABSL2"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL1-S-ABSL2"),
+                                        c("L-ABSL2-S-ABSL2",
+                                          "L-ABSL2-S-ABSL1"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL2-S-ABSL1"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL2-S-ABSL1")),
+                     symnum.args = list(cutpoints = 
+                                          c(0, 0.001, 0.8, 0.9, 1),
+                                        symbols = c("***",  "**", "*","ns")))
+avg_plot_bray
+
+avg_plot_jaccard = ggboxplot(jaccard_lung_fecal_floors_df_long_recode, x = "combo", 
+                    y = "jaccard_distance", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Jaccard distance",
+                 x.text.angle = 90) 
+avg_plot_jaccard = ggpar(avg_plot_jaccard, legend = "right") + 
+  rremove("xlab") + 
+  rremove("legend.title") + 
+  stat_compare_means(label = "p.signif", 
+                     comparisons = list(c("L-ABSL1-S-ABSL1",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("L-ABSL1-S-ABSL2",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("L-ABSL2-S-ABSL1",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("L-ABSL2-S-ABSL2",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL1-L-ABSL2"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL1-S-ABSL1"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL1-S-ABSL2"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL2-S-ABSL2"),
+                                        c("S-ABSL1-S-ABSL2",
+                                          "L-ABSL2-S-ABSL2")),
+                     symnum.args = list(cutpoints = 
+                                          c(0, 0.001, 0.5, 1),
+                                        symbols = c("***",  "*", "ns")))
+avg_plot_jaccard
+```
+
+```{r avg_distance_plot}
+tiff(file="avg_distance_plots_lung_fecal.tif", res=300, width=12, height=10, units="in")
+ggarrange(avg_plot_bray, avg_plot_jaccard, nrow = 2, ncol = 1, 
+          align = "v", heights = c(1.5,2))
+dev.off()
+```
+
+## Core microbiome
+The core microbiome (species present in >70% of samples) was calculated for the lung microbiome on each floor (ABSL1 and ABLS2), the stool microbiome on each floor (ABSL1 and ABSL2), the lung microbiome of gavaged germ free mice (gavaged with ABSL1 or ABSL2 stool), and the gut microbiome of gavaged germ free mice (gavaged with ABSL1 or ABSL2 stool). 
+
+The first step is to create OTU tables specific to each treatment group.
+```{r subset_otu_tables}
+lung_species_filtered_meta_absl1_stool = lung_species_filtered_meta %>% 
+  filter(Floor == "ABSL1" & `Sample Description` == "Stool") %>% 
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+lung_species_filtered_meta_absl2_stool = lung_species_filtered_meta %>% 
+  filter(Floor == "ABSL2" & `Sample Description` == "Stool") %>% 
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+lung_species_filtered_meta_absl1_lung = lung_species_filtered_meta %>% 
+  filter(Floor == "ABSL1" & `Sample Description` == "Lung") %>% 
+  filter(SampleID != "6739-OC-35") %>%
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+lung_species_filtered_meta_absl2_lung = lung_species_filtered_meta %>% 
+  filter(Floor == "ABSL2" & `Sample Description` == "Lung") %>% 
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+lung_species_filtered_meta_gf_absl1_lung = lung_species_filtered_meta %>% 
+  filter(Floor == "Germ-free" & 
+           `Sample Description` == "Lung" & 
+           Stool_origin == "ABSL1") %>% 
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+lung_species_filtered_meta_gf_absl2_lung = lung_species_filtered_meta %>% 
+  filter(Floor == "Germ-free" & 
+           `Sample Description` == "Lung" & 
+           Stool_origin == "ABSL2") %>% 
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+lung_species_filtered_meta_gf_absl1_stool = lung_species_filtered_meta %>% 
+  filter(Floor == "Germ-free" & 
+           `Sample Description` == "Stool" & 
+           Stool_origin == "ABSL1") %>% 
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+
+lung_species_filtered_meta_gf_absl2_stool = lung_species_filtered_meta %>% 
+  filter(Floor == "Germ-free" & 
+           `Sample Description` == "Stool" & 
+           Stool_origin == "ABSL2") %>% 
+  dplyr::select(1:15, where(~ is.numeric(.x) && sum(.x) != 0))
+```
+
+Then create a list of taxa present in >70% of samples
+```{r core_micro}
+absl1_stool_core_taxa = lung_species_filtered_meta_absl1_stool %>% 
+  dplyr::select(where(~ sum(. != 0) > 13))
+absl1_stool_core_taxa_list = as.data.frame(colnames(absl1_stool_core_taxa))
+
+absl2_stool_core_taxa = lung_species_filtered_meta_absl2_stool %>% 
+  dplyr::select(where(~ sum(. != 0) > 11))
+absl2_stool_core_taxa_list = as.data.frame(colnames(absl2_stool_core_taxa))
+
+absl1_lung_core_taxa = lung_species_filtered_meta_absl1_lung %>% 
+  dplyr::select(where(~ sum(. != 0) > 17))
+absl1_lung_core_taxa_list = as.data.frame(colnames(absl1_lung_core_taxa))
+
+absl2_lung_core_taxa = lung_species_filtered_meta_absl2_lung %>% 
+  dplyr::select(where(~ sum(. != 0) > 9))
+absl2_lung_core_taxa_list = as.data.frame(colnames(absl2_lung_core_taxa))
+
+gf_absl1_lung_core_taxa  = lung_species_filtered_meta_gf_absl1_lung %>% 
+  dplyr::select(where(~ sum(. != 0) > 2))
+gf_absl1_lung_core_taxa_list = as.data.frame(colnames(gf_absl1_lung_core_taxa))
+
+gf_absl2_lung_core_taxa  = lung_species_filtered_meta_gf_absl2_lung %>% 
+  dplyr::select(where(~ sum(. != 0) > 4))
+gf_absl2_lung_core_taxa_list = as.data.frame(colnames(gf_absl2_lung_core_taxa))
+
+gf_absl1_stool_core_taxa  = lung_species_filtered_meta_gf_absl1_stool %>% 
+  dplyr::select(where(~ sum(. != 0) > 2))
+gf_absl1_stool_core_taxa_list = as.data.frame(colnames(gf_absl1_stool_core_taxa))
+
+gf_absl2_stool_core_taxa  = lung_species_filtered_meta_gf_absl2_stool %>% 
+  dplyr::select(where(~ sum(. != 0) > 3))
+gf_absl2_stool_core_taxa_list = as.data.frame(colnames(gf_absl2_stool_core_taxa))
+```
+
+Overlap between treatments is calculated.
+```{r core_micro_overlap}
+absl1_lung_stool_overlap = inner_join(absl1_stool_core_taxa_list,
+                                      absl1_lung_core_taxa_list,
+                                      by = c("colnames(absl1_stool_core_taxa)" =
+                                               "colnames(absl1_lung_core_taxa)")) %>% rename(absl1_lung_absl1_stool = "colnames(absl1_stool_core_taxa)")
+
+absl2_lung_stool_overlap = inner_join(absl2_stool_core_taxa_list,
+                                      absl2_lung_core_taxa_list,
+                                      by = c("colnames(absl2_stool_core_taxa)" = "colnames(absl2_lung_core_taxa)")) %>% rename(absl2_lung_absl2_stool = "colnames(absl2_stool_core_taxa)")
+
+absl1_lung_absl2_stool_overlap = inner_join(absl2_stool_core_taxa_list,
+                                      absl1_lung_core_taxa_list,
+                                      by = c("colnames(absl2_stool_core_taxa)" = "colnames(absl1_lung_core_taxa)")) %>% rename(absl1_lung_absl2_stool = "colnames(absl2_stool_core_taxa)")
+
+absl2_lung_absl1_stool_overlap = inner_join(absl1_stool_core_taxa_list,
+                                      absl2_lung_core_taxa_list,
+                                      by = c("colnames(absl1_stool_core_taxa)" = "colnames(absl2_lung_core_taxa)")) %>% rename(absl2_lung_absl1_stool = "colnames(absl1_stool_core_taxa)")
+
+absl1_stool_absl2_stool_overlap = inner_join(absl1_stool_core_taxa_list,
+                                      absl2_stool_core_taxa_list,
+                                      by = c("colnames(absl1_stool_core_taxa)" = "colnames(absl2_stool_core_taxa)")) %>% rename(absl1_stool_absl2_stool = "colnames(absl1_stool_core_taxa)")
+
+absl1_lung_absl2_lung_overlap = inner_join(absl1_lung_core_taxa_list,
+                                      absl2_lung_core_taxa_list,
+                                      by = c("colnames(absl1_lung_core_taxa)" = "colnames(absl2_lung_core_taxa)")) %>% rename(absl1_lung_absl2_lung = "colnames(absl1_lung_core_taxa)")
+
+write_csv(absl1_lung_stool_overlap, "absl1_lung_absl1_stool_overlap.csv")
+write_csv(absl2_lung_stool_overlap, "absl2_lung_absl2_stool_overlap.csv")
+write_csv(absl1_lung_absl2_stool_overlap, "absl1_lung_absl2_stool_overlap.csv")
+write_csv(absl2_lung_absl1_stool_overlap, "absl2_lung_absl1_stool_overlap.csv")
+write_csv(absl1_lung_absl2_lung_overlap, "absl1_lung_absl2_lung_overlap.csv")
+write_csv(absl1_stool_absl2_stool_overlap, "absl1_stool_absl2_stool_overlap.csv")
+
+gfabsl1_lung_absl1_stool_overlap = inner_join(absl1_stool_core_taxa_list,
+                                      gf_absl1_lung_core_taxa_list,
+                                      by = c("colnames(absl1_stool_core_taxa)" =
+                                               "colnames(gf_absl1_lung_core_taxa)")) %>% rename(gfabsl1_lung_absl1_stool = "colnames(absl1_stool_core_taxa)")
+
+gfabsl2_lung_absl2_stool_overlap = inner_join(absl2_stool_core_taxa_list,
+                                      gf_absl2_lung_core_taxa_list,
+                                      by = c("colnames(absl2_stool_core_taxa)" = "colnames(gf_absl2_lung_core_taxa)")) %>% rename(gfabsl2_lung_absl2_stool = "colnames(absl2_stool_core_taxa)")
+
+gfabsl1_lung_absl2_stool_overlap = inner_join(absl2_stool_core_taxa_list,
+                                      gf_absl1_lung_core_taxa_list,
+                                      by = c("colnames(absl2_stool_core_taxa)" = "colnames(gf_absl1_lung_core_taxa)")) %>% rename(gfabsl1_lung_absl2_stool = "colnames(absl2_stool_core_taxa)")
+
+gfabsl2_lung_absl1_stool_overlap = inner_join(absl1_stool_core_taxa_list,
+                                      gf_absl2_lung_core_taxa_list,
+                                      by = c("colnames(absl1_stool_core_taxa)" = "colnames(gf_absl2_lung_core_taxa)")) %>% rename(gfabsl2_lung_absl1_stool = "colnames(absl1_stool_core_taxa)")
+
+gfabsl1_lung_gfabsl2_lung_overlap = inner_join(gf_absl1_lung_core_taxa_list,
+                                      gf_absl2_lung_core_taxa_list,
+                                      by = c("colnames(gf_absl1_lung_core_taxa)" = "colnames(gf_absl2_lung_core_taxa)")) %>% rename(gfabsl1_lung_gfabsl2_lung = "colnames(gf_absl1_lung_core_taxa)")
+
+write_csv(gfabsl1_lung_absl1_stool_overlap, "gfabsl1_lung_absl1_stool_overlap.csv")
+write_csv(gfabsl2_lung_absl2_stool_overlap, "gfabsl2_lung_absl2_stool_overlap.csv")
+write_csv(gfabsl1_lung_absl2_stool_overlap, "gfabsl1_lung_absl2_stool_overlap.csv")
+write_csv(gfabsl2_lung_absl1_stool_overlap, "gfabsl2_lung_absl1_stool_overlap.csv")
+write_csv(gfabsl1_lung_gfabsl2_lung_overlap, "gfabsl1_lung_gfabsl2_lung_overlap.csv")
+
+gfabsl1_stool_absl1_stool_overlap = inner_join(absl1_stool_core_taxa_list,
+                                      gf_absl1_stool_core_taxa_list,
+                                      by = c("colnames(absl1_stool_core_taxa)" =
+                                               "colnames(gf_absl1_stool_core_taxa)")) %>% rename(gfabsl1_stool_absl1_stool = "colnames(absl1_stool_core_taxa)")
+
+gfabsl2_stool_absl2_stool_overlap = inner_join(absl2_stool_core_taxa_list,
+                                      gf_absl2_stool_core_taxa_list,
+                                      by = c("colnames(absl2_stool_core_taxa)" = "colnames(gf_absl2_stool_core_taxa)")) %>% rename(gfabsl2_stool_absl2_stool = "colnames(absl2_stool_core_taxa)")
+
+gfabsl1_stool_absl2_stool_overlap = inner_join(absl2_stool_core_taxa_list,
+                                      gf_absl1_stool_core_taxa_list,
+                                      by = c("colnames(absl2_stool_core_taxa)" = "colnames(gf_absl1_stool_core_taxa)")) %>% rename(gfabsl1_stool_absl2_stool = "colnames(absl2_stool_core_taxa)")
+
+gfabsl2_stool_absl1_stool_overlap = inner_join(absl1_stool_core_taxa_list,
+                                      gf_absl2_stool_core_taxa_list,
+                                      by = c("colnames(absl1_stool_core_taxa)" = "colnames(gf_absl2_stool_core_taxa)")) %>% rename(gfabsl2_stool_absl1_stool = "colnames(absl1_stool_core_taxa)")
+
+gfabsl1_stool_gfabsl2_stool_overlap = inner_join(gf_absl1_stool_core_taxa_list,
+                                      gf_absl2_stool_core_taxa_list,
+                                      by = c("colnames(gf_absl1_stool_core_taxa)" = "colnames(gf_absl2_stool_core_taxa)")) %>% rename(gfabsl1_stool_gfabsl2_stool = "colnames(gf_absl1_stool_core_taxa)")
+
+write_csv(gfabsl1_stool_absl1_stool_overlap, "gfabsl1_stool_absl1_stool_overlap.csv")
+write_csv(gfabsl2_stool_absl2_stool_overlap, "gfabsl2_stool_absl2_stool_overlap.csv")
+write_csv(gfabsl1_stool_absl2_stool_overlap, "gfabsl1_stool_absl2_stool_overlap.csv")
+write_csv(gfabsl2_stool_absl1_stool_overlap, "gfabsl2_stool_absl1_stool_overlap.csv")
+write_csv(gfabsl1_stool_gfabsl2_stool_overlap, "gfabsl1_stool_gfabsl2_stool_overlap.csv")
+```
+
+
+## Phyla bar plots
+
+After collapsing the table at the phyla level, we constructed bar plots to visualize differences between the ABSL1 and ABSL2 floors.
+
+```{r barplot_lung}
+tiff(file="phyla_barplot_lung_floor.tif", res=300, width=12, height=6.5, units="in")
+phyla_plot = ggbarplot(phyla_lung_floor, x = "SampleID", y = "Relative abundance",
+          fill = "Phyla", color = "Phyla", palette = "Set1",
+          width = 1)
+ggpar(phyla_plot, legend = "right") +  
+          rremove("x.text") + rremove("xlab")
+dev.off()
+```
+
+## NMDS plots
+
+We constructed a non-linear multidimensional scaling plot for the Bray-Curtis metric.
+
+```{r nmds_bray_lung}
+mds_otus_bray_lung_floor<-metaMDS(bray_lung_floors, k=2, trymax=499)
+mmds_otus_bray_lung_floor_points<-mds_otus_bray_lung_floor$points
+mmds_otus_bray_lung_floor_points2<-merge(x=mmds_otus_bray_lung_floor_points, 
+                             y = lung_species_filtered_meta_floors, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mmds_otus_bray_lung_floor_points2$Floor = factor(mmds_otus_bray_lung_floor_points2$Floor,
+                                     levels = c("ABSL1", "ABSL2"))
+
+tiff(file="nmds_plot_bray_lung_floors.tif", res=300, width=8, height=6, units="in")
+bray_lung_floor_plot <- ggplot(mmds_otus_bray_lung_floor_points2, 
+                    aes(x = MDS1, y = MDS2, color = Floor, 
+                        shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set1') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Floor, 
+                   linetype = Floor))
+bray_lung_floor_plot
+dev.off()
+bray_lung_floor_plot
+```
+PDF plots are included below
+```{r bray_lung_floor_pdf}
+pdf(file="nmds_plot_bray_lung_floors.pdf", width=8, height=6)
+lung_species_filtered_meta_floors
+dev.off()
+```
+
+```{r nmds_bray_lung_fecal}
+lung_fecal_species_filtered_meta_floors2 = lung_fecal_species_filtered_meta_floors %>% 
+  mutate(Floor_Body_Site = paste(Floor, `Sample Description`, sep = " "))
+mds_otus_bray_lung_fecal_floor<-metaMDS(bray_lung_fecal_floors, k=2, trymax=499)
+mmds_otus_bray_lung_fecal_floor_points<-mds_otus_bray_lung_fecal_floor$points
+mmds_otus_bray_lung_fecal_floor_points2<-merge(x=mmds_otus_bray_lung_fecal_floor_points, 
+                             y = lung_fecal_species_filtered_meta_floors2, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mmds_otus_bray_lung_fecal_floor_points2$Floor_Body_Site = factor(mmds_otus_bray_lung_fecal_floor_points2$Floor_Body_Site,
+                                     levels = c("ABSL1 Stool", "ABSL1 Lung", "ABSL2 Stool", "ABSL2 Lung"))
+
+tiff(file="nmds_plot_bray_lung_fecal_floors.tif", res=300, width=8, height=6, units="in")
+bray_lung_fecal_floor_plot <- ggplot(mmds_otus_bray_lung_fecal_floor_points2, 
+                    aes(x = MDS1, y = MDS2, color = Floor_Body_Site, 
+                        shape = Treatment)) +
+  geom_point(size=3) + scale_color_manual(values = c("#e31a1c", "#fb9a99", "#1f78b4", "#a6cee3")) +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_blank(),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Floor, 
+                   linetype = Floor), 
+               type = "t", level = 0.95)
+bray_lung_fecal_floor_plot
+dev.off()
+bray_lung_fecal_floor_plot
+```
+PDF plots are included below
+```{r bray_lung_fecal_floor_pdf}
+pdf(file="nmds_plot_bray_lung_fecal_floors.pdf", width=8, height=6)
+lung_fecal_species_filtered_meta_floors
+dev.off()
+```
+
+```{r nmds_bray_gflung_fecal}
+gflung_fecal_species_filtered_meta_floors2 = gflung_fecal_species_filtered_meta_floors %>% 
+  mutate(Floor_Body_Site = paste(Floor, `Sample Description`, sep = " "))
+mds_otus_bray_gflung_fecal_floor<-metaMDS(bray_gflung_fecal_floors, k=2, trymax=499)
+mmds_otus_bray_gflung_fecal_floor_points<-mds_otus_bray_lung_fecal_floor$points
+mmds_otus_bray_gflung_fecal_floor_points2<-merge(x=mmds_otus_bray_gflung_fecal_floor_points, 
+                             y = gflung_fecal_species_filtered_meta_floors2, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mmds_otus_bray_gflung_fecal_floor_points2$Floor_Body_Site = factor(mmds_otus_bray_gflung_fecal_floor_points2$Floor_Body_Site,
+                                     levels = c("ABSL1 Stool", "ABSL1 Lung", "ABSL2 Stool", "ABSL2 Lung"))
+
+tiff(file="nmds_plot_bray_gflung_fecal_floors.tif", res=300, width=8, height=6, units="in")
+bray_gflung_fecal_floor_plot <- ggplot(mmds_otus_bray_lung_fecal_floor_points2, 
+                    aes(x = MDS1, y = MDS2, color = Floor_Body_Site, 
+                        shape = Treatment)) +
+  geom_point(size=3) + scale_color_manual(values = c("#e31a1c", "#fb9a99", "#1f78b4", "#a6cee3")) +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_blank(),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Floor, 
+                   linetype = Floor), 
+               type = "t", level = 0.95)
+bray_gflung_fecal_floor_plot
+dev.off()
+bray_gflung_fecal_floor_plot
+```
+PDF plots are included below
+```{r bray_gflung_fecal_floor_pdf}
+pdf(file="nmds_plot_bray_gflung_fecal_floors.pdf", width=8, height=6)
+gflung_fecal_species_filtered_meta_floors
+dev.off()
+```
+
+We constructed a non-linear multidimensional scaling plot for the Jaccard metric.
+
+```{r nmds_jaccard_lung}
+mds_otus_jaccard_lung_floor<-metaMDS(jaccard_lung_floors, k=2, trymax=499)
+mmds_otus_jaccard_lung_floor_points<-mds_otus_jaccard_lung_floor$points
+mmds_otus_jaccard_lung_floor_points2<-merge(x=mmds_otus_jaccard_lung_floor_points, 
+                             y = lung_species_filtered_meta_floors, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mmds_otus_jaccard_lung_floor_points2$Floor = factor(mmds_otus_jaccard_lung_floor_points2$Floor,
+                                     levels = c("ABSL1", "ABSL2"))
+
+tiff(file="nmds_plot_jaccard_lung_floors.tif", res=300, width=8, height=6, units="in")
+jaccard_lung_floor_plot <- ggplot(mmds_otus_jaccard_lung_floor_points2, 
+                    aes(x = MDS1, y = MDS2, color = Floor, 
+                        shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set1') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8)))
+jaccard_lung_floor_plot
+dev.off()
+jaccard_lung_floor_plot
+```
+PDF plots are included below
+```{r bray_pdf}
+pdf(file="nmds_plot_jaccard_lung_floor.pdf", width=8, height=6)
+jaccard_lung_floor_plot
+dev.off()
+```
+
+## Alpha diversity
+
+ABSL1 and ABSL2 lung samples only.
+```{r alpha}
+shannond = diversity(lung_species_filtered_meta_floors[,15:350], index = "shannon")
+
+shannone = shannond/log(specnumber(lung_species_filtered_meta_floors[,15:350]))
+
+diversity = cbind(lung_species_filtered_meta_floors[,1:14], shannond, shannone)
+
+diversity$Floor = factor(diversity$Floor,
+                                     levels = c("ABSL1", "ABSL2"))
+
+div = wilcox.test(shannond ~ Floor, 
+                        data = diversity)
+div
+
+divt = wilcox.test(shannond ~ Treatment, 
+                        data = diversity)
+divt
+
+even = wilcox.test(shannone ~ Floor, 
+                        data = diversity)
+even
+
+event = wilcox.test(shannone ~ Treatment, 
+                        data = diversity)
+event
+
+div_lm = lm(shannond ~ Floor*Treatment, 
+            data = diversity)
+Anova(div_lm)
+
+
+
+div_plot = ggboxplot(diversity, x = "Floor", 
+                    y = "shannond", color = "Floor", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Shannon Diversity") 
+div_plot = ggpar(div_plot, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title")
+div_plot
+
+even_plot = ggboxplot(diversity, x = "Floor", 
+                    y = "shannone", color = "Floor", 
+                    palette = "Set1", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Shannon Evenness") 
+even_plot = ggpar(even_plot, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") 
+even_plot
+
+tiff(file="Floor_diversity.tif", res=300, width=4, height=3, units="in")
+div_plot
+dev.off()
+```
+
+## Individual taxonomic differences
+
+We ran a generalized linear model with a negative binomial distribution to assess the influence of floor on the relative abundance of all phyla detected in the lung microbiome.
+
+```{r phyla_comp_lung_floor}
+phyla_lung_floor_wide = phyla_lung %>% 
+  filter(Floor == "ABSL1" | Floor == "ABSL2")
+
+glht_glmmTMB <- function (model, ..., component="cond") {
+  glht(model, ...,
+       coef. = function(x) fixef(x)[[component]],
+       vcov. = function(x) vcov(x)[[component]],
+       df = NULL)
+}
+modelparm.glmmTMB <- function (model, coef. = function(x) fixef(x)[[component]],
+                               vcov. = function(x) vcov(x)[[component]],
+                               df = NULL, component="cond", ...) {
+  multcomp:::modelparm.default(model, coef. = coef., vcov. = vcov.,
+                               df = df, ...)
+}
+
+actino = glmmTMB(Actinobacteria ~ Floor + Treatment, 
+                  data = phyla_lung_floor_wide, family = nbinom2)
+Anova(actino)
+
+chlam = glmmTMB(Chlamydiae ~ Floor + Treatment, 
+                  data = phyla_lung_floor_wide, family = nbinom2)
+Anova(chlam)
+
+firm = glmmTMB(Firmicutes ~ Floor + Treatment, 
+                  data = phyla_lung_floor_wide, family = nbinom2)
+Anova(firm)
+
+proteo = glmmTMB(Proteobacteria ~ Floor + Treatment, 
+                  data = phyla_lung_floor_wide, family = nbinom2)
+Anova(proteo)
+```
+
+

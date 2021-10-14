@@ -5,12 +5,12 @@
 #SBATCH --mail-user=elizabeth.mallott@vanderbilt.edu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH	--cpus-per-task=20
-#SBATCH --mem=100G
+#SBATCH	--cpus-per-task=10
+#SBATCH --mem=200G
 #SBATCH --time=48:00:00
 #SBATCH --output=/home/mallote/kaiju_chioma_array_%A_%a.out
 #SBATCH --error=/home/mallote/kaiju_chioma_array_%A_%a.err
-#SBATCH --array=1-3%1
+#SBATCH --array=1-2%2
 
 project=/data/bordenstein_lab/chioma_analysis/round2
 kaiju=/data/bordenstein_lab/vmi/kaiju
@@ -29,6 +29,10 @@ ${kaiju}/bin/kaiju -z 4 -t ${kaijudb}/nodes.dmp -f ${kaijudb}/kaiju_db_nr_euk.fm
 
 #Create summary tables
 
- ${kaiju}/bin/kaiju2table -t ${kaijudb}/nodes.dmp -n ${kaijudb}/names.dmp -r species -u -l superkingdom,kingdom,phylum,class,order,family,genus,species -o ${project}/kaiju_out/${filename}_summary.tsv ${project}/kaiju_out/${filename}.out
+${kaiju}/bin/kaiju2table -t ${kaijudb}/nodes.dmp -n ${kaijudb}/names.dmp -r species -u -l superkingdom,kingdom,phylum,class,order,family,genus,species -o ${project}/kaiju_out/${filename}_summary.tsv ${project}/kaiju_out/${filename}.out
+
+#Remove input file (space reasons)
+
+rm ${file}
 
 ######################################################
