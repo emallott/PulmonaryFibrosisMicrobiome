@@ -238,6 +238,230 @@ pdf(file="nmds_plot_jaccard.pdf", width=8, height=6)
 jaccard_plot
 dev.off()
 ```
+We constructed a non-linear multidimensional scaling plot for the Bray-Curtis metric for ABSL1 samples only
+
+```{r nmds_bray_sex}
+mds_otus_bray_sex<-metaMDS(bray, k=2, trymax=499)
+mds_otus_bray_sex_points<-mds_otus_bray_sex$points
+mds_otus_bray_sex_points2<-merge(x=mds_otus_bray_sex_points, 
+                             y = species_meta, 
+                             by.x = "row.names", 
+                             by.y = "row.names") %>% 
+  filter(Sex != "CONTROL")
+
+mds_otus_bray_sex_points2$Sex = factor(mds_otus_bray_sex_points2$Sex,
+                                     levels = c("M", "F"))
+
+tiff(file="nmds_plot_bray_sex.tif", res=300, width=8, height=6, units="in")
+bray_sex_plot <- ggplot(mds_otus_bray_sex_points2, 
+                    aes(x = MDS1, y = MDS2, color = Sex, 
+                        shape = Floor)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set2') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Floor, 
+                   linetype = Floor))
+bray_sex_plot
+dev.off()
+bray_sex_plot
+```
+PDF plots are included below
+```{r bray_sex_pdf}
+pdf(file="nmds_plot_bray_sex.pdf", width=8, height=6)
+bray_sex_plot
+dev.off()
+```
+
+We constructed a non-linear multidimensional scaling plot for the Bray-Curtis metric for ABSL1 samples only
+
+```{r nmds_bray_absl1}
+mds_otus_bray_absl1<-metaMDS(bray_absl1, k=2, trymax=499)
+mds_otus_bray_absl1_points<-mds_otus_bray_absl1$points
+mds_otus_bray_absl1_points2<-merge(x=mds_otus_bray_absl1_points, 
+                             y = species_meta_absl1, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mds_otus_bray_absl1_points2$Sex = factor(mds_otus_bray_absl1_points2$Sex,
+                                     levels = c("M", "F"))
+
+tiff(file="nmds_plot_bray_absl1.tif", res=300, width=8, height=6, units="in")
+bray_absl1_plot <- ggplot(mds_otus_bray_absl1_points2, 
+                    aes(x = MDS1, y = MDS2, color = Sex, 
+                        shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set2') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Sex))
+bray_absl1_plot
+dev.off()
+bray_absl1_plot
+```
+PDF plots are included below
+```{r bray_absl1_pdf}
+pdf(file="nmds_plot_bray_absl1.pdf", width=8, height=6)
+bray_absl1_plot
+dev.off()
+```
+
+We constructed a non-linear multidimensional scaling plot for the Bray-Curtis metric for ABSL2 samples only
+
+```{r nmds_bray_absl2}
+mds_otus_bray_absl2<-metaMDS(bray_absl2, k=2, trymax=499)
+mds_otus_bray_absl2_points<-mds_otus_bray_absl2$points
+mds_otus_bray_absl2_points2<-merge(x=mds_otus_bray_absl2_points, 
+                             y = species_meta_absl2, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mds_otus_bray_absl2_points2$Sex = factor(mds_otus_bray_absl2_points2$Sex,
+                                     levels = c("M", "F"))
+
+tiff(file="nmds_plot_bray_absl2.tif", res=300, width=8, height=6, units="in")
+bray_absl2_plot <- ggplot(mds_otus_bray_absl2_points2, 
+                    aes(x = MDS1, y = MDS2, color = Sex, 
+                        shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set2') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Sex))
+bray_absl2_plot
+dev.off()
+bray_absl2_plot
+```
+PDF plots are included below
+```{r bray_absl2_pdf}
+pdf(file="nmds_plot_bray_absl2.pdf", width=8, height=6)
+bray_absl2_plot
+dev.off()
+```
+
+We constructed a non-linear multidimensional scaling plot for the Jaccard metric examined by sex.
+
+```{r nmds_jaccard}
+mds_otus_jaccard_sex<-metaMDS(jaccard, k=2, trymax=499)
+mds_otus_jaccard_sex_points<-mds_otus_jaccard_sex$points
+mds_otus_jaccard_sex_points2<-merge(x=mds_otus_jaccard_sex_points, 
+                             y = species_meta, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mds_otus_jaccard_sex_points2$Sex = factor(mds_otus_jaccard_sex_points2$Sex,
+                                     levels = c("M", "F"))
+
+tiff(file="nmds_plot_jaccard_sex.tif", res=300, width=8, height=6, units="in")
+jaccard_plot_sex <- ggplot(mds_otus_jaccard_sex_points2, 
+                    aes(x = MDS1, y = MDS2, color = Sex, 
+                        shape = Floor)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set2') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Floor, 
+                   linetype = Floor))
+jaccard_plot_sex
+dev.off()
+jaccard_plot_sex
+```
+PDF plots are included below
+```{r bray_pdf}
+pdf(file="nmds_plot_jaccard_sex.pdf", width=8, height=6)
+jaccard_plot_sex
+dev.off()
+```
+
+We constructed a non-linear multidimensional scaling plot for the Jaccard metric for ABSL1 samples only.
+
+```{r nmds_jaccard_absl1}
+mds_otus_jaccard_absl1<-metaMDS(jaccard_absl1, k=2, trymax=499)
+mds_otus_jaccard_absl1_points<-mds_otus_jaccard_absl1$points
+mds_otus_jaccard_absl1_points2<-merge(x=mds_otus_jaccard_absl1_points, 
+                             y = species_meta_absl1, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mds_otus_jaccard_absl1_points2$Sex = factor(mds_otus_jaccard_absl1_points2$Sex,
+                                     levels = c("M", "F"))
+
+tiff(file="nmds_plot_jaccard_absl1.tif", res=300, width=8, height=6, units="in")
+jaccard_plot_absl1 <- ggplot(mds_otus_jaccard_absl1_points2, 
+                    aes(x = MDS1, y = MDS2, color = Sex, 
+                        shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set2') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Sex))
+jaccard_plot_absl1
+dev.off()
+jaccard_plot_absl1
+```
+PDF plots are included below
+```{r bray_pdf}
+pdf(file="nmds_plot_jaccard_absl1.pdf", width=8, height=6)
+jaccard_plot_absl1
+dev.off()
+```
+
+We constructed a non-linear multidimensional scaling plot for the Jaccard metric for ABSL2 samples only.
+
+```{r nmds_jaccard_absl2}
+mds_otus_jaccard_absl2<-metaMDS(jaccard_absl2, k=2, trymax=499)
+mds_otus_jaccard_absl2_points<-mds_otus_jaccard_absl2$points
+mds_otus_jaccard_absl2_points2<-merge(x=mds_otus_jaccard_absl2_points, 
+                             y = species_meta_absl2, 
+                             by.x = "row.names", 
+                             by.y = "row.names")
+
+mds_otus_jaccard_absl2_points2$Sex = factor(mds_otus_jaccard_absl2_points2$Sex,
+                                     levels = c("M", "F"))
+
+tiff(file="nmds_plot_jaccard_absl2.tif", res=300, width=8, height=6, units="in")
+jaccard_plot_absl2 <- ggplot(mds_otus_jaccard_absl2_points2, 
+                    aes(x = MDS1, y = MDS2, color = Sex, 
+                        shape = Treatment)) +
+  geom_point(size=3) + scale_color_brewer(palette = 'Set2') +
+  theme(panel.background = element_rect(fill = 'white', colour = 'black'), 
+        legend.key=element_blank()) + 
+  theme(axis.title.x=element_text(size=rel(2)), 
+        axis.title.y=element_text(size=rel(2)),
+        plot.title = element_text(size=rel(3)),
+        legend.title = element_text(size=rel(2)),
+        legend.text = element_text(size = rel(1.8))) +
+  stat_ellipse(aes(x = MDS1, y = MDS2, group = Sex))
+jaccard_plot_absl2
+dev.off()
+jaccard_plot_absl2
+```
+PDF plots are included below
+```{r bray_pdf}
+pdf(file="nmds_plot_jaccard_absl2.pdf", width=8, height=6)
+jaccard_plot_absl2
+dev.off()
+```
 
 ## Alpha diversity
 ```{r alpha}
@@ -468,6 +692,86 @@ ggarrange(div_plot_t1, even_plot_t1, rich_plot_t1,
           nrow = 2, ncol = 3, 
           common.legend = T, align = "h", legend = "right", 
           labels = c("A", "B", "C", "D", "E", "F"))
+dev.off()
+
+div_plot_absl1 = ggboxplot(diversity_nogerm_absl1, x = "Sex", 
+                    y = "shannond", color = "Sex", 
+                    palette = "Set2", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Shannon Diversity") 
+div_plot_absl1 = ggpar(div_plot_absl1, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+div_plot_absl1
+
+even_plot_absl1 = ggboxplot(diversity_nogerm_absl1, x = "Sex", 
+                    y = "shannone", color = "Sex", 
+                    palette = "Set2", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Pielou's Evenness") 
+even_plot_absl1 = ggpar(even_plot_absl1, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+even_plot_absl1
+
+rich_plot_absl1 = ggboxplot(diversity_nogerm_absl1, x = "Sex", 
+                    y = "speciesr", color = "Sex", 
+                    palette = "Set2", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Species richness") 
+rich_plot_absl1 = ggpar(rich_plot_absl1, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+rich_plot_absl1
+
+div_plot_absl2 = ggboxplot(diversity_nogerm_absl2, x = "Sex", 
+                    y = "shannond", color = "Sex", 
+                    palette = "Set2", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Shannon Diversity") 
+div_plot_absl2 = ggpar(div_plot_absl2, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+div_plot_absl2
+
+even_plot_absl2 = ggboxplot(diversity_nogerm_absl2, x = "Sex", 
+                    y = "shannone", color = "Sex", 
+                    palette = "Set2", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Pielou's Evenness") 
+even_plot_absl2 = ggpar(even_plot_absl2, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+even_plot_absl2
+
+rich_plot_absl2 = ggboxplot(diversity_nogerm_absl2, x = "Sex", 
+                    y = "speciesr", color = "Sex", 
+                    palette = "Set2", add = "jitter", 
+                    add.params = list(fill = "white"), 
+                 ylab = "Species richness") 
+rich_plot_absl2 = ggpar(rich_plot_absl2, legend = "right") + 
+  rremove("xlab") + rremove("x.text") + 
+  rremove("legend.title") + 
+  stat_compare_means(method = "wilcox.test")
+rich_plot_absl2
+
+tiff(file="Diversity_sex.tif", res=300, width=12, height=6, units="in")
+ggarrange(div_plot_absl1, even_plot_absl1, rich_plot_absl1, 
+          div_plot_absl2, even_plot_absl2, rich_plot_absl2,
+          nrow = 2, ncol = 3, 
+          common.legend = T, align = "hv", legend = "right")
+dev.off()
+
+pdf(file="Diversity_sex.pdf", width=12, height=6)
+ggarrange(div_plot_absl1, even_plot_absl1, rich_plot_absl1, 
+          div_plot_absl2, even_plot_absl2, rich_plot_absl2,
+          nrow = 2, ncol = 3, 
+          common.legend = T, align = "hv", legend = "right")
 dev.off()
 ```
 
